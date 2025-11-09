@@ -238,51 +238,57 @@ class DragHelper {
   }
 
   constrainToBoundary(x, y) {
-    const boundary = this.options.boundary;
-    const elementRect = this.element.getBoundingClientRect();
-    const boundaryRect = boundary.getBoundingClientRect();
+    // 边界元素：优先使用传入 boundary；否则用 document.documentElement
+    const boundaryEl = this.options.boundary || document.documentElement || document.body;
 
-    // 获取元素的当前定位类型
+    const elementRect = this.element.getBoundingClientRect();
+
+    // 获取元素定位
     const computedStyle = window.getComputedStyle(this.element);
     const isFixed = computedStyle.position === 'fixed';
 
-    // 如果是fixed定位，则相对于视口计算边界
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    // 视口尺寸（用于 fixed 元素）
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
 
-    let minX, minY, maxX, maxY;
+    let minX = 0, minY = 0, maxX = 0, maxY = 0;
 
     if (isFixed) {
-        minX = 0;
-        minY = 0;
-        maxX = viewportWidth - elementRect.width;
-        maxY = viewportHeight - elementRect.height;
+      // fixed: 相对视口限制拖动范围
+      minX = 0;
+      minY = 0;
+      maxX = Math.max(0, viewportWidth - elementRect.width);
+      maxY = Math.max(0, viewportHeight - elementRect.height);
     } else {
-        // 否则，相对于其offsetParent计算（通常是body）
-        minX = boundaryRect.left;
-        minY = boundaryRect.top;
-        maxX = boundaryRect.right - elementRect.width;
-        maxY = boundaryRect.bottom - elementRect.height;
+      // 非 fixed: 相对边界元素限制拖动范围
+      const boundaryRect = (boundaryEl && boundaryEl.getBoundingClientRect)
+        ? boundaryEl.getBoundingClientRect()
+        : { left: 0, top: 0, right: viewportWidth, bottom: viewportHeight };
+
+      minX = boundaryRect.left;
+      minY = boundaryRect.top;
+      maxX = boundaryRect.right - elementRect.width;
+      maxY = boundaryRect.bottom - elementRect.height;
     }
 
-    // 确保元素不会超出边界
-    let finalX = Math.max(minX, Math.min(maxX, x));
-    let finalY = Math.max(minY, Math.min(maxY, y));
+    // 夹紧在范围内
+    const finalX = Math.max(minX, Math.min(maxX, x));
+    const finalY = Math.max(minY, Math.min(maxY, y));
 
-    // 如果元素是fixed定位，并且其父元素是body，则直接设置left/top
-    // 否则，需要计算相对于父元素的偏移
-    if (isFixed && this.element.offsetParent === document.body) {
-        return {
-            x: finalX,
-            y: finalY
-        };
+    if (isFixed) {
+      // fixed: 直接返回视口坐标
+      return { x: finalX, y: finalY };
     } else {
-        // 对于非fixed或有其他offsetParent的元素，需要计算相对于其offsetParent的left/top
-        const parentRect = this.element.offsetParent.getBoundingClientRect();
-        return {
-            x: finalX - parentRect.left,
-            y: finalY - parentRect.top
-        };
+      // 非 fixed: 转换为相对 offsetParent 的坐标
+      const parent = this.element.offsetParent || document.documentElement || document.body;
+      const parentRect = (parent && parent.getBoundingClientRect)
+        ? parent.getBoundingClientRect()
+        : { left: 0, top: 0 };
+
+      return {
+        x: finalX - parentRect.left,
+        y: finalY - parentRect.top,
+      };
     }
   }
 
@@ -306,16 +312,20 @@ class DragHelper {
     if (!this.options.savePosition) return;
 
     try {
+      // 元素必须在文档中，且具有可度量的矩形
+      if (!document.body.contains(this.element)) return;
+
       const saved = localStorage.getItem(this.options.storageKey);
-      if (saved) {
-        const position = JSON.parse(saved);
+      if (!saved) return;
 
-        // 验证位置是否仍然有效
-        const boundedPosition = this.constrainToBoundary(position.left, position.top);
+      const position = JSON.parse(saved);
+      if (typeof position.left !== 'number' || typeof position.top !== 'number') return;
 
-        this.element.style.left = boundedPosition.x + 'px';
-        this.element.style.top = boundedPosition.y + 'px';
-      }
+      // 计算并应用受限位置
+      const boundedPosition = this.constrainToBoundary(position.left, position.top);
+
+      this.element.style.left = boundedPosition.x + 'px';
+      this.element.style.top = boundedPosition.y + 'px';
     } catch (error) {
       console.warn('无法加载拖拽位置:', error);
     }
