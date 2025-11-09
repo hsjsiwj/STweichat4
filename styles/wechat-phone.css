@@ -3,37 +3,38 @@
 /* 悬浮按钮 */
 #wechat-trigger {
   position: fixed;
-  bottom: 20px;
+  bottom: 100px; /* 调整位置，避免遮挡 */
   right: 20px;
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: #07C160; /* 微信绿色 */
-  cursor: pointer;
+  /* background: #07C160; */ /* 微信绿色，现在用图片覆盖 */
+  cursor: grab; /* 拖拽光标 */
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  overflow: hidden; /* 确保图片圆角 */
 }
 
-#wechat-trigger img {
+/* #wechat-trigger img {
   width: 40px;
   height: 40px;
-}
+} */ /* 图片直接作为innerHTML，不需要这个样式 */
 
 /* 微信主框架 */
 #wechat-frame {
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%); /* 确保居中 */
   width: 375px; /* iPhone标准宽度 */
-  height: 667px; /* iPhone标准高度 */
-  background: #F7F7F7;
+  height: 812px; /* iPhone标准高度 */
+  background: #f7f7f7; /* 调整背景色 */
   border-radius: 40px;
   overflow: hidden;
-  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2); /* 调整阴影 */
   z-index: 10000;
   display: none;
   flex-direction: column;
@@ -42,12 +43,13 @@
 /* 顶部状态栏（模拟iOS） */
 .wechat-status-bar {
   height: 44px;
-  background: #F7F7F7;
+  background: #ededed; /* 调整背景色 */
   border-bottom: 1px solid #E5E5E5;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
+  cursor: grab; /* 允许通过状态栏拖拽 */
 }
 
 /* 内容区 */

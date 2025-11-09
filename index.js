@@ -46,7 +46,7 @@ jQuery(async () => {
     const trigger = document.createElement('div');
     trigger.id = 'wechat-trigger';
     trigger.className = 'wechat-button';
-    trigger.innerHTML = '<div style="font-size: 32px; font-weight: bold; color: green;">微信</div>';
+    trigger.innerHTML = `<img src="${window.wechatExtensionPath}/images/wechat-icon.jpg" style="width: 100%; height: 100%; border-radius: 50%;">`;
     trigger.title = '打开微信模拟器';
     document.body.appendChild(trigger);
 
@@ -62,6 +62,12 @@ jQuery(async () => {
     
     console.log('[WeChat Simulator] 扩展加载完成');
   };
+
+  // 加载CSS
+  const dragCss = document.createElement('link');
+  dragCss.rel = 'stylesheet';
+  dragCss.href = `${extensionBasePath}/drag-helper.css`;
+  document.head.appendChild(dragCss);
 
   modules.forEach(mod => {
     const script = document.createElement('script');
