@@ -69,7 +69,7 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       // 2) 集成设置（安全容错）
       try {
         const context = window.SillyTavern?.getContext?.();
-        const defaultSettings = { enabled: true, monitorInterval: 3000 };
+        const defaultSettings = { enabled: true, monitorInterval: 3000, autoOpen: true };
         if (context) {
           if (!context.extensionSettings.wechat_simulator) {
             context.extensionSettings.wechat_simulator = { ...defaultSettings };
@@ -118,6 +118,8 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         });
       }
       await loadCss(`${extensionBasePath}/styles/drag-helper.css`);
+      // 兜底加载主样式，避免 manifest 未生效时无样式
+      await loadCss(`${extensionBasePath}/styles/wechat-phone.css`);
 
       // 4) 通用加载器（带 MIME fallback：失败后以 fetch+Blob 注入）
       const loadScript = (url, { optional = false } = {}) =>
@@ -190,6 +192,18 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       // 7) 启动扩展（无论是否降级，都创建入口）
       initExtension();
 
+      // 创建实例并按设置尝试自动打开
+      await ensurePhoneInstance(6);
+      try {
+        const ctx = window.SillyTavern?.getContext?.();
+        const autoOpen = !!(ctx?.extensionSettings?.wechat_simulator?.autoOpen ?? true);
+        if (autoOpen && window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
+          window.wechatPhone.toggle();
+        }
+      } catch (e) {
+        console.warn('[WeChat Simulator] 自动打开失败:', e);
+      }
+
       // 8) 可选模块异步加载（不阻塞主流程）
       Promise.all(optionalModules.map(u => loadScript(u, { optional: true }))).then(results => {
         const okCount = results.filter(r => r.ok).length;
@@ -223,19 +237,41 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
           trigger.title = '打开微信模拟器';
           document.body.appendChild(trigger);
 
-          trigger.addEventListener('click', () => {
-            if (window.wechatPhone) {
+          trigger.addEventListener('click', async () => {
+            // 已有实例
+            if (window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
               window.wechatPhone.toggle();
-            } else if (window.WeChatPhone) {
+              return;
+            }
+            // 尝试通过类直接创建
+            if (window.WeChatPhone) {
               try {
                 window.wechatPhone = new window.WeChatPhone();
                 window.wechatPhone.toggle();
+                return;
               } catch (e) {
                 console.warn('[WeChat Simulator] 初始化 WeChatPhone 失败:', e);
               }
-            } else {
-              console.warn('[WeChat Simulator] 手机框架未就绪（降级模式），仅显示入口按钮');
             }
+            // 退化：如果全局有初始化函数（非模块顶层函数），调用它
+            if (typeof window.initWeChatPhone === 'function') {
+              try {
+                window.initWeChatPhone();
+                if (window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
+                  window.wechatPhone.toggle();
+                  return;
+                }
+              } catch (e) {
+                console.warn('[WeChat Simulator] 调用 initWeChatPhone 失败:', e);
+              }
+            }
+            // 最后再轮询若干次（等待脚本异步加载完成）
+            const ok = await ensurePhoneInstance(6);
+            if (ok && window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
+              window.wechatPhone.toggle();
+              return;
+            }
+            console.warn('[WeChat Simulator] 手机框架未就绪（降级模式），仅显示入口按钮');
           });
 
           if (window.DragHelper) {
@@ -257,6 +293,31 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         }
 
         console.log('[WeChat Simulator] 扩展初始化完成（降级容错已启用）');
+      }
+
+      // 实用函数：等待并确保 wechatPhone 实例创建
+      async function ensurePhoneInstance(retries = 10) {
+        // 已有实例
+        if (window.wechatPhone) return true;
+        // 类存在则直接创建
+        if (window.WeChatPhone) {
+          try { window.wechatPhone = new window.WeChatPhone(); return true; } catch (e) {
+            console.warn('[WeChat Simulator] 创建 WeChatPhone 实例失败:', e);
+          }
+        }
+        // 若全局有初始化函数，调用
+        if (typeof window.initWeChatPhone === 'function') {
+          try {
+            window.initWeChatPhone();
+            if (window.wechatPhone) return true;
+          } catch (e) {
+            console.warn('[WeChat Simulator] 调用 initWeChatPhone 失败:', e);
+          }
+        }
+        // 递归等待
+        if (retries <= 0) return false;
+        await new Promise(r => setTimeout(r, 500));
+        return ensurePhoneInstance(retries - 1);
       }
 
       // 10) 暴露调试助手，便于在控制台快速定位“为何没有悬浮按钮/报错”
