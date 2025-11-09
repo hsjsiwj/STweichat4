@@ -8,33 +8,63 @@
   const start = async () => {
     try {
       // 1) 动态确定扩展根路径：.../third-party/<dir>
-      let extensionBasePath = '';
-      try {
-        // 优先 currentScript
-        const cs = document.currentScript;
-        if (cs && cs.src && /\/index\.js(\?.*)?$/.test(cs.src)) {
-          const src = cs.src.replace(location.origin, '');
-          extensionBasePath = src.replace(/\/index\.js(\?.*)?$/, '');
-        }
-        // 退化：扫描所有 script 标签
-        if (!extensionBasePath) {
-          const tag = Array.from(document.getElementsByTagName('script'))
-            .find(s => s.src && s.src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(s.src));
-          if (tag && tag.src) {
-            const src = tag.src.replace(location.origin, '');
-            extensionBasePath = src.replace(/\/index\.js(\?.*)?$/, '');
-          }
-        }
-        // 最终回退：优先仓库目录名 STweichat4，其次 wechat-extension
-        if (!extensionBasePath) {
-          extensionBasePath = './scripts/extensions/third-party/STweichat4';
-        }
-      } catch (e) {
-        console.warn('[WeChat Simulator] 未能自动解析扩展路径，使用回退路径', e);
-        extensionBasePath = './scripts/extensions/third-party/STweichat4';
-      }
-      window.wechatExtensionPath = extensionBasePath;
-      console.log('[WeChat Simulator] 扩展路径:', window.wechatExtensionPath);
+// 修正：避免误匹配其它扩展（例如 ST-Prompt-Template），并校验 JS MIME
+let extensionBasePath = '';
+async function resolveBasePath() {
+  const scripts = Array.from(document.getElementsByTagName('script'));
+  const preferredDirs = [
+    '/scripts/extensions/third-party/STweichat4',
+    '/scripts/extensions/third-party/STweichat4/dist',
+    '/scripts/extensions/third-party/wechat-extension',
+  ];
+
+  // 从 currentScript 获取候选
+  const currentSrc = (document.currentScript && document.currentScript.src) || '';
+  const addParentIfValid = (src) => {
+    if (src && src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(src)) {
+      const rel = src.replace(location.origin, '').replace(/\/index\.js(\?.*)?$/, '');
+      if (!preferredDirs.includes(rel)) preferredDirs.unshift(rel);
+    }
+  };
+  addParentIfValid(currentSrc);
+
+  // 从所有 script 中挑选匹配 index.js 的路径，优先包含 STweichat4
+  const stHit = scripts.find(
+    s => s.src && s.src.includes('/scripts/extensions/third-party/STweichat4/') && /\/index\.js(\?.*)?$/.test(s.src),
+  );
+  addParentIfValid(stHit && stHit.src);
+
+  const anyHit = scripts.find(
+    s => s.src && s.src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(s.src),
+  );
+  addParentIfValid(anyHit && anyHit.src);
+
+  // 校验候选：使用 HEAD 请求检测 wechat-phone.js 是否存在且为 javascript
+  const isGood = async (base) => {
+    try {
+      const resp = await fetch(`${base}/wechat-phone.js`, { method: 'HEAD' });
+      if (!resp.ok) return false;
+      const ct = (resp.headers.get('content-type') || '').toLowerCase();
+      return ct.includes('javascript') || ct.includes('ecmascript') || ct.includes('text/javascript');
+    } catch {
+      return false;
+    }
+  };
+
+  for (const base of preferredDirs) {
+    // 统一为绝对路径（以 / 开头），避免相对路径被错误解析到其它扩展目录
+    const abs = base.startsWith('/') ? base : base.replace(/^\.\//, '/');
+    // 仅尝试 third-party 目录
+    if (!abs.startsWith('/scripts/extensions/third-party/')) continue;
+    /* eslint-disable no-await-in-loop */
+    if (await isGood(abs)) return abs;
+    /* eslint-enable no-await-in-loop */
+  }
+  return '/scripts/extensions/third-party/STweichat4';
+}
+extensionBasePath = await resolveBasePath();
+window.wechatExtensionPath = extensionBasePath;
+console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionPath);
 
       // 2) 集成设置（安全容错）
       try {
