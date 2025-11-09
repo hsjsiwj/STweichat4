@@ -668,3 +668,212 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
   });
 })();
+
+/* === WeChat Extension: dynamic override (safe after class ready) ===
+   - 解决前置补丁在类定义前执行导致未生效的问题
+   - 等待 WeChatPhone 定义后，覆盖 renderChatList/renderChatDetail/loadTabContent 为“多会话聚合 + 动态绑定”版本
+*/
+(function waitAndOverride() {
+  function override() {
+    if (typeof window.WeChatPhone === 'undefined' || !window.WeChatPhone.prototype) return false;
+    const P = window.WeChatPhone.prototype;
+
+    // 安全初始化内部状态
+    if (!P._ensureState) {
+      P._ensureState = function () {
+        if (!this.currentTab) this.currentTab = 'chat';
+        if (!this.currentView) this.currentView = 'list';
+        if (!this.currentChatId) this.currentChatId = null;
+        if (!this._currentChatName) this._currentChatName = '';
+      };
+    }
+
+    // 覆盖：聊天列表（优先使用 wechatContext 的聚合）
+    P.renderChatList = function renderChatList() {
+      this._ensureState();
+      const content = document.getElementById('wechat-content');
+
+      const demoChats = [
+        { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
+        { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
+        { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
+      ];
+
+      const ctx = window.wechatContext;
+      const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
+      const chats = useCtx ? ctx.chats : demoChats;
+
+      content.innerHTML = `
+        <div class="chat-list">
+          ${chats.map(c => `
+            <div class="chat-item" data-id="${c.id}" data-name="${c.name}"
+                 style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
+              <div class="avatar" style="width:44px;height:44px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:12px;">
+                ${c.avatar || '🟢'}
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <div style="font-size:16px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;">${c.name}</div>
+                  <div style="font-size:12px;color:#999;">${c.time || ''}</div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                  <div style="font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%;">${c.last || ''}</div>
+                  ${c.unread ? `<span style="background:#f54d4d;color:#fff;border-radius:10px;padding:0 6px;font-size:12px;line-height:18px;min-width:18px;text-align:center;">${c.unread}</span>` : ''}
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      // 点击进入详情
+      content.querySelectorAll('.chat-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-id');
+          const name = el.getAttribute('data-name') || '聊天';
+
+          let msgs = [];
+          if (useCtx && ctx.messagesByChatId) {
+            msgs = ctx.messagesByChatId[id] || [];
+          }
+          this.renderChatDetail({ id, name }, msgs);
+        });
+      });
+
+      this.currentView = 'list';
+      this.currentChatId = null;
+      this._currentChatName = '';
+      // 更新头部返回显隐（如果之前补丁存在）
+      if (typeof this.updateHeaderNav === 'function') this.updateHeaderNav();
+    };
+
+    // 覆盖：聊天详情（支持传入消息或自动从 ctx 获取）
+    P.renderChatDetail = function renderChatDetail(chat, providedMessages) {
+      this._ensureState();
+      const content = document.getElementById('wechat-content');
+      const chatId = (chat && chat.id) || 'current';
+      const chatName = (chat && chat.name) || '聊天';
+
+      let msgs = Array.isArray(providedMessages) ? providedMessages : [];
+      const ctx = window.wechatContext;
+      if (!msgs.length && ctx && ctx.ready && ctx.messagesByChatId) {
+        msgs = ctx.messagesByChatId[chatId] || [];
+      }
+      if (!msgs.length) {
+        msgs = [
+          { from: 'other', text: '你好～' },
+          { from: 'me', text: '你好，有什么事吗？' },
+        ];
+      }
+
+      this.setTitle(chatName);
+
+      content.innerHTML = `
+        <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
+          <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
+            ${msgs.map(m => `
+              <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
+                <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
+                  ${String(m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
+            <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
+            <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;">发送</button>
+          </div>
+        </div>
+      `;
+
+      const input = document.getElementById('chat-input');
+      const send = document.getElementById('chat-send');
+      const messages = content.querySelector('.messages');
+
+      const pushMyMsg = (text) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+        wrap.innerHTML = `<div style="max-width:70%;padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
+        messages.appendChild(wrap);
+        messages.scrollTop = messages.scrollHeight;
+      };
+
+      send.addEventListener('click', () => {
+        const val = (input.value || '').trim();
+        if (!val) return;
+        pushMyMsg(val);
+        input.value = '';
+        // TODO: 后续可桥接 ST 输入框/发送 API
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') send.click();
+      });
+
+      this.currentView = 'detail';
+      this.currentChatId = chatId;
+      this._currentChatName = chatName;
+      if (typeof this.updateHeaderNav === 'function') this.updateHeaderNav();
+    };
+
+    // 覆盖：tab 切换，确保聊天页使用动态渲染
+    const oldLoad = P.loadTabContent;
+    P.loadTabContent = function (tab) {
+      this._ensureState();
+      this.currentTab = tab;
+      switch (tab) {
+        case 'chat':
+          this.setTitle('微信');
+          this.renderChatList();
+          break;
+        case 'contacts':
+          this.setTitle('通讯录');
+          if (typeof this.renderContacts === 'function') this.renderContacts();
+          break;
+        case 'discover':
+          this.setTitle('发现');
+          if (typeof this.renderDiscover === 'function') this.renderDiscover();
+          break;
+        case 'me':
+          this.setTitle('我');
+          if (typeof this.renderMe === 'function') this.renderMe();
+          break;
+        default:
+          if (typeof oldLoad === 'function') oldLoad.call(this, tab);
+          break;
+      }
+    };
+
+    // 绑定 wechat-context-updated：自动刷新当前页面
+    if (!window._wechatDynamicBound) {
+      document.addEventListener('wechat-context-updated', () => {
+        if (!window.wechatPhone) return;
+        try {
+          window.wechatPhone._ensureState?.();
+          if (window.wechatPhone.currentTab === 'chat') {
+            if (window.wechatPhone.currentView === 'list') {
+              window.wechatPhone.renderChatList();
+            } else if (window.wechatPhone.currentView === 'detail' && window.wechatPhone.currentChatId) {
+              const ctx = window.wechatContext;
+              const msgs = ctx?.messagesByChatId?.[window.wechatPhone.currentChatId] || [];
+              window.wechatPhone.renderChatDetail({ id: window.wechatPhone.currentChatId, name: window.wechatPhone._currentChatName || '聊天' }, msgs);
+            }
+          }
+        } catch (e) {
+          console.warn('[WeChat Simulator] 自动刷新失败:', e);
+        }
+      });
+      window._wechatDynamicBound = true;
+    }
+
+    // 若 context-sync 已可用，确保启动
+    if (typeof window.initContextSync === 'function') {
+      try { window.initContextSync(); } catch (e) { console.warn('[WeChat Simulator] initContextSync failed:', e); }
+    }
+
+    return true;
+  }
+
+  if (!override()) {
+    const t = setInterval(() => { if (override()) clearInterval(t); }, 100);
+  }
+})();
