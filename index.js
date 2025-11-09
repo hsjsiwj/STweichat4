@@ -6,19 +6,22 @@
 
 // 核心初始化
 jQuery(async () => {
+  // 动态确定扩展路径
+  const extensionName = 'STweichat4'; // 这个名字必须和你的git仓库名一致
+  const extensionBasePath = `./scripts/extensions/third-party/${extensionName}`;
+  window.wechatExtensionPath = extensionBasePath; // 设置全局路径变量
+
   const context = SillyTavern.getContext();
   // 默认设置
   const defaultSettings = {
     enabled: true,
     monitorInterval: 3000,
-    // ... 其他设置
   };
   if (!context.extensionSettings.wechat_simulator) {
     context.extensionSettings.wechat_simulator = { ...defaultSettings };
     context.saveSettingsDebounced();
   }
 
-  // 加载核心模块：context-monitor.js, wechat-phone.js 等
   const modules = [
     'drag-helper',
     'app/context-sync',
@@ -32,18 +35,14 @@ jQuery(async () => {
   let loadedCount = 0;
 
   const initExtension = () => {
-    // 初始化所有模块
     initContextSync();
     initMessageApp();
     initAddFriend();
     initBuildGroup();
     initMomentsApp();
     initShopApp();
-
-    // 最后初始化UI
     initWeChatPhone();
 
-    // 创建并设置悬浮按钮
     const trigger = document.createElement('div');
     trigger.id = 'wechat-trigger';
     trigger.className = 'wechat-button';
@@ -66,13 +65,16 @@ jQuery(async () => {
 
   modules.forEach(mod => {
     const script = document.createElement('script');
-    script.src = `./scripts/extensions/third-party/wechat-extension/${mod}.js`;
+    script.src = `${extensionBasePath}/${mod}.js`;
     script.onload = () => {
       loadedCount++;
       console.log(`${mod} 模块加载完成`);
       if (loadedCount === modules.length) {
         initExtension();
       }
+    };
+    script.onerror = () => {
+        console.error(`[WeChat Simulator] 无法加载模块: ${mod}.js`);
     };
     document.head.appendChild(script);
   });
