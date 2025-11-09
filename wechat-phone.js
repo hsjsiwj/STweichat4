@@ -24,6 +24,7 @@ class WeChatPhone {
         const frame = document.createElement('div');
         frame.id = 'wechat-frame';
         frame.style.display = 'none'; // 默认隐藏
+        frame.style.position = 'fixed'; // 确保使用fixed定位
         frame.style.zIndex = '10000'; // 确保z-index足够高
         document.body.appendChild(frame);
 
@@ -66,7 +67,7 @@ class WeChatPhone {
         
         // 使框架可拖拽
         if (window.DragHelper) {
-            new window.DragHelper(frame, { dragHandle: null, storageKey: 'wechat-frame-position' }); // 设置为null，整个框架可拖拽
+            new window.DragHelper(frame, { storageKey: 'wechat-frame-position' }); // 移除dragHandle，整个框架可拖拽
         }
     }
 

@@ -33,8 +33,9 @@ class DragHelper {
 
   init() {
     // 设置元素为可拖拽
-    this.element.style.position = 'absolute';
-    this.element.style.cursor = 'move';
+    // 不再强制设置position为absolute，尊重元素原有position
+    // this.element.style.position = 'absolute';
+    this.element.style.cursor = 'grab'; // 默认使用grab光标
     this.element.style.userSelect = 'none';
     this.element.style.webkitUserSelect = 'none';
     this.element.style.mozUserSelect = 'none';
@@ -209,16 +210,48 @@ class DragHelper {
     const elementRect = this.element.getBoundingClientRect();
     const boundaryRect = boundary.getBoundingClientRect();
 
-    // 计算边界
-    const minX = boundaryRect.left;
-    const minY = boundaryRect.top;
-    const maxX = boundaryRect.right - elementRect.width;
-    const maxY = boundaryRect.bottom - elementRect.height;
+    // 获取元素的当前定位类型
+    const computedStyle = window.getComputedStyle(this.element);
+    const isFixed = computedStyle.position === 'fixed';
 
-    return {
-      x: Math.max(minX, Math.min(maxX, x)),
-      y: Math.max(minY, Math.min(maxY, y))
-    };
+    // 如果是fixed定位，则相对于视口计算边界
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+    let minX, minY, maxX, maxY;
+
+    if (isFixed) {
+        minX = 0;
+        minY = 0;
+        maxX = viewportWidth - elementRect.width;
+        maxY = viewportHeight - elementRect.height;
+    } else {
+        // 否则，相对于其offsetParent计算（通常是body）
+        minX = boundaryRect.left;
+        minY = boundaryRect.top;
+        maxX = boundaryRect.right - elementRect.width;
+        maxY = boundaryRect.bottom - elementRect.height;
+    }
+
+    // 确保元素不会超出边界
+    let finalX = Math.max(minX, Math.min(maxX, x));
+    let finalY = Math.max(minY, Math.min(maxY, y));
+
+    // 如果元素是fixed定位，并且其父元素是body，则直接设置left/top
+    // 否则，需要计算相对于父元素的偏移
+    if (isFixed && this.element.offsetParent === document.body) {
+        return {
+            x: finalX,
+            y: finalY
+        };
+    } else {
+        // 对于非fixed或有其他offsetParent的元素，需要计算相对于其offsetParent的left/top
+        const parentRect = this.element.offsetParent.getBoundingClientRect();
+        return {
+            x: finalX - parentRect.left,
+            y: finalY - parentRect.top
+        };
+    }
   }
 
   savePosition() {

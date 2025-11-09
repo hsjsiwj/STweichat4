@@ -36,26 +36,76 @@
 
 /* 顶部状态栏（模拟iOS） */
 .wechat-status-bar {
-  height: 44px;
+  height: 20px; /* 状态栏高度 */
   background: #ededed; /* 微信背景色 */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 15px;
-  font-size: 14px;
-  font-weight: 600;
+  padding: 0 10px;
+  font-size: 12px;
+  color: #000;
 }
 
+.wechat-status-bar .time {
+    font-weight: bold;
+}
+
+.wechat-status-bar .icons span {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-left: 5px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.wechat-status-bar .signal {
+    background-image: url('../images/signal.png'); /* 假设有信号图标 */
+}
+.wechat-status-bar .wifi {
+    background-image: url('../images/wifi.png'); /* 假设有wifi图标 */
+}
+.wechat-status-bar .battery {
+    background-image: url('../images/battery.png'); /* 假设有电池图标 */
+}
+
+
 .wechat-header {
-    height: 56px;
+    height: 44px; /* 头部高度 */
     background: #ededed;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 15px;
-    font-size: 18px;
+    font-size: 17px;
     font-weight: 600;
+    border-bottom: 1px solid #e0e0e0;
 }
+
+.wechat-header .title {
+    flex-grow: 1;
+    text-align: center;
+}
+
+.wechat-header .actions span {
+    width: 24px;
+    height: 24px;
+    margin-left: 15px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    cursor: pointer;
+}
+
+.wechat-header .search {
+    background-image: url('../images/search-icon.png'); /* 假设有搜索图标 */
+}
+
+.wechat-header .add {
+    background-image: url('../images/add-icon.png'); /* 假设有添加图标 */
+}
+
 
 /* 内容区 */
 .wechat-content {
