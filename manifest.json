@@ -1,0 +1,12 @@
+{
+    "display_name": "WeChat Simulator",
+    "loading_order": 100,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "styles/main.css",
+    "author": "Grok",
+    "version": "1.0",
+    "homePage": "",
+    "description": "模拟微信界面扩展，支持聊天、加好友、建群、朋友圈、商城，同步SillyTavern数据"
+}
