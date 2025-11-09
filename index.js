@@ -87,31 +87,82 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         console.warn('[WeChat Simulator] 设置集成失败，不影响基本功能', e);
       }
 
-      // 3) 加载基础样式（拖拽态兜底）
-      try {
-        const dragCss = document.createElement('link');
-        dragCss.rel = 'stylesheet';
-        dragCss.href = `${extensionBasePath}/styles/drag-helper.css`;
-        document.head.appendChild(dragCss);
-      } catch (e) {
-        console.warn('[WeChat Simulator] 注入拖拽样式失败', e);
+      // 3) 加载基础样式（拖拽态兜底，带 MIME fallback）
+      async function loadCss(url) {
+        return new Promise(resolve => {
+          try {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = url;
+            link.onload = () => resolve({ ok: true, via: 'link' });
+            link.onerror = async () => {
+              // MIME 被严格检查或 404 时，改为拉取文本并以内联 <style> 注入
+              try {
+                const resp = await fetch(url);
+                const css = await resp.text();
+                const style = document.createElement('style');
+                style.textContent = css;
+                document.head.appendChild(style);
+                console.warn('[WeChat Simulator] CSS MIME fallback via <style>:', url);
+                resolve({ ok: true, via: 'inline' });
+              } catch (err) {
+                console.error('[WeChat Simulator] CSS load failed:', url, err);
+                resolve({ ok: false });
+              }
+            };
+            document.head.appendChild(link);
+          } catch (e) {
+            console.warn('[WeChat Simulator] loadCss failed:', url, e);
+            resolve({ ok: false });
+          }
+        });
       }
+      await loadCss(`${extensionBasePath}/styles/drag-helper.css`);
 
-      // 4) 通用加载器
+      // 4) 通用加载器（带 MIME fallback：失败后以 fetch+Blob 注入）
       const loadScript = (url, { optional = false } = {}) =>
         new Promise(resolve => {
-          const s = document.createElement('script');
-          s.src = url;
-          s.onload = () => {
-            console.log(`[WeChat Simulator] 模块加载成功: ${url}`);
-            resolve({ url, ok: true });
-          };
-          s.onerror = () => {
-            const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败: ${url}`;
-            if (optional) { console.warn(msg); } else { console.error(msg); }
+          try {
+            const tag = document.createElement('script');
+            tag.src = url;
+            tag.onload = () => {
+              console.log(`[WeChat Simulator] 模块加载成功: ${url}`);
+              resolve({ url, ok: true, via: 'script' });
+            };
+            tag.onerror = async () => {
+              // 第一次失败，尝试以 fetch 文本 + Blob URL 注入，绕过 text/plain MIME 限制
+              try {
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const code = await resp.text();
+                const blob = new Blob([code], { type: 'application/javascript' });
+                const objUrl = URL.createObjectURL(blob);
+                const tag2 = document.createElement('script');
+                tag2.src = objUrl;
+                tag2.onload = () => {
+                  URL.revokeObjectURL(objUrl);
+                  console.warn('[WeChat Simulator] MIME fallback via Blob URL:', url);
+                  resolve({ url, ok: true, via: 'blob' });
+                };
+                tag2.onerror = () => {
+                  URL.revokeObjectURL(objUrl);
+                  const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(二次): ${url}`;
+                  if (optional) { console.warn(msg); } else { console.error(msg); }
+                  resolve({ url, ok: false });
+                };
+                document.head.appendChild(tag2);
+              } catch (err) {
+                const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(fetch): ${url}`;
+                if (optional) { console.warn(msg, err); } else { console.error(msg, err); }
+                resolve({ url, ok: false });
+              }
+            };
+            document.head.appendChild(tag);
+          } catch (e) {
+            const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(异常): ${url}`;
+            if (optional) { console.warn(msg, e); } else { console.error(msg, e); }
             resolve({ url, ok: false });
-          };
-          document.head.appendChild(s);
+          }
         });
 
       // 5) 模块列表
