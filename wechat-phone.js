@@ -65,19 +65,8 @@ class WeChatPhone {
             </div>
         `;
 
-        // 使框架可拖拽（修复越界与“拖不下来”问题）
-        // 1) 限定在视口内（boundary: document.documentElement）
-        // 2) 仅允许通过状态栏拖拽（dragHandle: '.wechat-status-bar'）
-        // 3) 不保存位置（savePosition: false），避免历史位置将机身带到屏外
-        if (window.DragHelper) {
-            new window.DragHelper(frame, {
-                boundary: document.documentElement,
-                dragHandle: '.wechat-status-bar',
-                savePosition: false,
-                clickThreshold: 8,
-                storageKey: 'wechat-frame-position' // 仍保留key，未来如需开启保存可直接使用
-            });
-        }
+        // 按你的要求：手机主界面不再可拖拽，始终完整显示在视口（使用 CSS 居中）
+        // 悬浮“💬”图标仍可拖拽（由 index.js 中 DragHelper(trigger) 负责）
     }
 
     bindNavEvents() {
