@@ -60,14 +60,17 @@
     background-position: center;
 }
 
-.wechat-status-bar .signal {
-    background-image: url('../images/signal.png'); /* 假设有信号图标 */
+.wechat-status-bar .signal::after {
+    content: '📶';
+    font-size: 12px;
 }
-.wechat-status-bar .wifi {
-    background-image: url('../images/wifi.png'); /* 假设有wifi图标 */
+.wechat-status-bar .wifi::after {
+    content: '🛜';
+    font-size: 12px;
 }
-.wechat-status-bar .battery {
-    background-image: url('../images/battery.png'); /* 假设有电池图标 */
+.wechat-status-bar .battery::after {
+    content: '🔋';
+    font-size: 12px;
 }
 
 
@@ -98,12 +101,20 @@
     cursor: pointer;
 }
 
-.wechat-header .search {
-    background-image: url('../images/search-icon.png'); /* 假设有搜索图标 */
+.wechat-header .search::after {
+    content: '🔍';
+    display: block;
+    text-align: center;
+    line-height: 24px;
+    font-size: 16px;
 }
 
-.wechat-header .add {
-    background-image: url('../images/add-icon.png'); /* 假设有添加图标 */
+.wechat-header .add::after {
+    content: '＋';
+    display: block;
+    text-align: center;
+    line-height: 24px;
+    font-size: 18px;
 }
 
 
@@ -144,19 +155,25 @@
     background-repeat: no-repeat;
     background-position: center;
 }
-
-.wechat-nav-item .icon.chat {
-    background-image: url('../images/chat-icon.png');
+.wechat-nav-item .icon::after {
+    display: block;
+    text-align: center;
+    line-height: 24px;
+    font-size: 18px;
 }
 
-.wechat-nav-item .icon.contacts {
-    background-image: url('../images/contacts-icon.png');
+.wechat-nav-item .icon.chat::after {
+    content: '💬';
 }
 
-.wechat-nav-item .icon.discover {
-    background-image: url('../images/discover-icon.png');
+.wechat-nav-item .icon.contacts::after {
+    content: '👥';
 }
 
-.wechat-nav-item .icon.me {
-    background-image: url('../images/me-icon.png');
+.wechat-nav-item .icon.discover::after {
+    content: '🧭';
+}
+
+.wechat-nav-item .icon.me::after {
+    content: '👤';
 }

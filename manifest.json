@@ -4,9 +4,9 @@
     "requires": [],
     "optional": [],
     "js": "index.js",
-    "css": "",
+    "css": "styles/wechat-phone.css",
     "author": "Grok",
-    "version": "1.0",
+    "version": "1.1",
     "homePage": "",
-    "description": "模拟微信界面扩展，支持聊天、加好友、建群、朋友圈、商城，同步SillyTavern数据"
+    "description": "模拟微信界面扩展：自动探测扩展路径、基础UI(微信/通讯录/发现/我)与简易交互(会话/输入/占位朋友圈/商城)，可选模块按需加载"
 }

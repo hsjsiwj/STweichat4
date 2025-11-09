@@ -1,0 +1,64 @@
+/* WeChat Extension - Drag helper fallback styles
+   1) 提供拖拽过程的视觉反馈
+   2) 为悬浮触发按钮提供兜底样式（若未被自定义样式覆盖）
+   注意：若项目已有全局样式，可只保留 .dragging 的样式以避免重复定义
+*/
+
+/* 拖拽态统一视觉反馈 */
+.dragging {
+  cursor: grabbing !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 触发按钮的兜底样式（index.js 已内联部分样式，这里做兼容补充） */
+.wechat-button,
+#wechat-trigger {
+  position: fixed;
+  bottom: 100px; /* 避免遮挡 ST 原生按钮 */
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+
+  /* 基础视觉（若 index.js 未设置内联颜色时生效） */
+  background: #07C160;
+  color: #fff;
+  font-size: 24px;
+  box-shadow: 0 6px 18px rgba(7, 193, 96, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+/* 悬停/按下反馈 */
+.wechat-button:hover,
+#wechat-trigger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(7, 193, 96, 0.45);
+}
+
+.wechat-button:active,
+#wechat-trigger:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 16px rgba(7, 193, 96, 0.30);
+}
+
+/* 在拖拽过程中提升层级以避免被覆盖 */
+.dragging.wechat-button,
+.dragging#wechat-trigger {
+  z-index: 10000 !important;
+}
+
+/* 兼容部分浏览器的可点击区域 */
+.wechat-button *,
+#wechat-trigger * {
+  pointer-events: none;
+}
