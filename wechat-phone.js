@@ -504,12 +504,80 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       messages.scrollTop = messages.scrollHeight;
     };
 
+    // 自动侦测 ST 输入区与发送按钮并尝试发送；失败则回退本地回显
+    function trySendToSillyTavern(text) {
+      try {
+        // 允许通过设置开关（默认 true）：若没有设置对象也视为启用
+        const st = window.SillyTavern?.getContext?.();
+        const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
+        const allowAuto = (autoSend === undefined) ? true : !!autoSend;
+        if (!allowAuto) return false;
+
+        // 常见输入框/按钮选择器集合（优先级从高到低）
+        const inputSelectors = [
+          '#send_textarea', 'textarea#send_textarea',
+          'textarea[name="send_textarea"]',
+          '[data-testid="send-textarea"]',
+          'textarea#sendText', 'textarea[name="sendText"]',
+          '.send-textarea textarea', '.send-textarea'
+        ];
+        const buttonSelectors = [
+          '#send_but', 'button#send_but',
+          '[data-testid="send-button"]',
+          'button[aria-label="Send"]',
+          '.send_button', '.send-btn', 'button.send'
+        ];
+
+        const inputEl = inputSelectors
+          .map(sel => document.querySelector(sel))
+          .find(Boolean);
+        const buttonEl = buttonSelectors
+          .map(sel => document.querySelector(sel))
+          .find(Boolean);
+
+        if (!inputEl) {
+          // 兜底：尝试找到页面里唯一可见的大 textarea
+          const all = Array.from(document.querySelectorAll('textarea'));
+          const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
+          if (guess) {
+            guess.focus();
+            guess.value = text;
+            guess.dispatchEvent(new Event('input', { bubbles: true }));
+            // 回车尝试提交
+            guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+            return true;
+          }
+          return false;
+        }
+
+        // 写入文本并触发 input
+        inputEl.focus();
+        inputEl.value = text;
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // 优先点击按钮；若无按钮则模拟回车
+        if (buttonEl) {
+          buttonEl.click();
+        } else {
+          inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        }
+        return true;
+      } catch (e) {
+        console.warn('[WeChat Simulator] trySendToSillyTavern 失败:', e);
+        return false;
+      }
+    }
+
     send.addEventListener('click', () => {
       const val = (input.value || '').trim();
       if (!val) return;
-      pushMyMsg(val);
+
+      // 先尝试发送到 SillyTavern；失败再本地回显
+      const sent = trySendToSillyTavern(val);
+      if (!sent) {
+        pushMyMsg(val);
+      }
       input.value = '';
-      // 这里可扩展：同步到 ST 输入框或通过 API 发送
     });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
