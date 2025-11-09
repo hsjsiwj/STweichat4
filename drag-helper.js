@@ -94,9 +94,41 @@ class DragHelper {
     this.startY = event.clientY;
     this.startTime = Date.now();
 
+    // 计算当前元素可视位置
     const rect = this.element.getBoundingClientRect();
     this.startElementX = rect.left;
     this.startElementY = rect.top;
+
+    // 关键修复：若元素使用了 transform: translate(...) 实现居中，则在拖拽开始时去除 transform，
+    // 同时把当前可视位置固化为 left/top，避免“拖动时位置飘移/跳跃”
+    try {
+      const computed = window.getComputedStyle(this.element);
+      const hasTransform = computed.transform && computed.transform !== 'none';
+      // 仅在未设置明确 left/top 时进行固化，避免覆盖已有定位
+      const hasLeft = computed.left && computed.left !== 'auto';
+      const hasTop = computed.top && computed.top !== 'auto';
+      if (hasTransform && (!hasLeft || !hasTop)) {
+        // 去除 transform，并将当前位置写入 left/top
+        this.element.style.transform = 'none';
+        // 对 fixed 元素直接用视口坐标；非 fixed 元素换算为相对 offsetParent 的坐标
+        const isFixed = computed.position === 'fixed';
+        if (isFixed) {
+          this.element.style.left = `${this.startElementX}px`;
+          this.element.style.top = `${this.startElementY}px`;
+        } else {
+          const parentRect = (this.element.offsetParent || document.body).getBoundingClientRect();
+          this.element.style.left = `${this.startElementX - parentRect.left}px`;
+          this.element.style.top = `${this.startElementY - parentRect.top}px`;
+        }
+        // 同步拖拽起点
+        const newRect = this.element.getBoundingClientRect();
+        this.startElementX = newRect.left;
+        this.startElementY = newRect.top;
+      }
+    } catch (fixErr) {
+      // 安全忽略
+      // console.warn('DragHelper transform fix failed:', fixErr);
+    }
 
     // 清除之前的定时器
     if (this.touchTimer) {
