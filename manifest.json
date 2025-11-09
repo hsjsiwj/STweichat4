@@ -4,7 +4,7 @@
     "requires": [],
     "optional": [],
     "js": "index.js",
-    "css": "styles/main.css",
+    "css": "",
     "author": "Grok",
     "version": "1.0",
     "homePage": "",

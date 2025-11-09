@@ -7,9 +7,17 @@ class WeChatPhone {
     }
 
     init() {
+        this.loadCSS();
         this.createFrame();
         this.bindNavEvents();
         this.loadTabContent('chat'); // 默认加载聊天
+    }
+
+    loadCSS() {
+        const cssLink = document.createElement('link');
+        cssLink.rel = 'stylesheet';
+        cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css`;
+        document.head.appendChild(cssLink);
     }
 
     createFrame() {
