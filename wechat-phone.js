@@ -24,6 +24,7 @@ class WeChatPhone {
         const frame = document.createElement('div');
         frame.id = 'wechat-frame';
         frame.style.display = 'none'; // 默认隐藏
+        frame.style.zIndex = '10000'; // 确保z-index足够高
         document.body.appendChild(frame);
 
         frame.innerHTML = `
@@ -36,10 +37,10 @@ class WeChatPhone {
                 <div class="wechat-nav-item" data-tab="me"><span>我</span></div>
             </div>
         `;
-
+        
         // 使框架可拖拽
         if (window.DragHelper) {
-            new window.DragHelper(frame, { dragHandle: '.wechat-status-bar' });
+            new window.DragHelper(frame, { dragHandle: '.wechat-status-bar', storageKey: 'wechat-frame-position' });
         }
     }
 
