@@ -28,19 +28,45 @@ class WeChatPhone {
         document.body.appendChild(frame);
 
         frame.innerHTML = `
-            <div class="wechat-status-bar">微信</div>
+            <div class="wechat-status-bar">
+                <span class="time">10:00</span>
+                <div class="icons">
+                    <span class="signal"></span>
+                    <span class="wifi"></span>
+                    <span class="battery"></span>
+                </div>
+            </div>
+            <div class="wechat-header">
+                <span class="title">微信</span>
+                <div class="actions">
+                    <span class="search"></span>
+                    <span class="add"></span>
+                </div>
+            </div>
             <div class="wechat-content" id="wechat-content"></div>
             <div class="wechat-nav">
-                <div class="wechat-nav-item active" data-tab="chat"><span>微信</span></div>
-                <div class="wechat-nav-item" data-tab="contacts"><span>通讯录</span></div>
-                <div class="wechat-nav-item" data-tab="discover"><span>发现</span></div>
-                <div class="wechat-nav-item" data-tab="me"><span>我</span></div>
+                <div class="wechat-nav-item active" data-tab="chat">
+                    <div class="icon chat"></div>
+                    <span>微信</span>
+                </div>
+                <div class="wechat-nav-item" data-tab="contacts">
+                    <div class="icon contacts"></div>
+                    <span>通讯录</span>
+                </div>
+                <div class="wechat-nav-item" data-tab="discover">
+                    <div class="icon discover"></div>
+                    <span>发现</span>
+                </div>
+                <div class="wechat-nav-item" data-tab="me">
+                    <div class="icon me"></div>
+                    <span>我</span>
+                </div>
             </div>
         `;
         
         // 使框架可拖拽
         if (window.DragHelper) {
-            new window.DragHelper(frame, { dragHandle: '.wechat-status-bar', storageKey: 'wechat-frame-position' });
+            new window.DragHelper(frame, { dragHandle: null, storageKey: 'wechat-frame-position' }); // 设置为null，整个框架可拖拽
         }
     }
 

@@ -8,7 +8,6 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  /* background: #07C160; */ /* 微信绿色，现在用图片覆盖 */
   cursor: grab; /* 拖拽光标 */
   z-index: 9999;
   display: flex;
@@ -18,11 +17,6 @@
   overflow: hidden; /* 确保图片圆角 */
 }
 
-/* #wechat-trigger img {
-  width: 40px;
-  height: 40px;
-} */ /* 图片直接作为innerHTML，不需要这个样式 */
-
 /* 微信主框架 */
 #wechat-frame {
   position: fixed;
@@ -31,7 +25,7 @@
   transform: translate(-50%, -50%); /* 确保居中 */
   width: 375px; /* iPhone标准宽度 */
   height: 812px; /* iPhone标准高度 */
-  background: #f7f7f7; /* 调整背景色 */
+  background: #ededed; /* 微信背景色 */
   border-radius: 40px;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2); /* 调整阴影 */
@@ -43,25 +37,37 @@
 /* 顶部状态栏（模拟iOS） */
 .wechat-status-bar {
   height: 44px;
-  background: #ededed; /* 调整背景色 */
-  border-bottom: 1px solid #E5E5E5;
+  background: #ededed; /* 微信背景色 */
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  cursor: grab; /* 允许通过状态栏拖拽 */
+  justify-content: space-between;
+  padding: 0 15px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wechat-header {
+    height: 56px;
+    background: #ededed;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+    font-size: 18px;
+    font-weight: 600;
 }
 
 /* 内容区 */
 .wechat-content {
   flex: 1;
   overflow-y: auto;
+  background: white;
 }
 
-/* 底部导航栏，参考flutter-wechat-master home.png */
+/* 底部导航栏 */
 .wechat-nav {
   height: 50px;
-  background: white;
+  background: #f7f7f7;
   border-top: 1px solid #E5E5E5;
   display: flex;
   justify-content: space-around;
@@ -72,7 +78,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
   color: #888;
 }
 
@@ -80,13 +86,27 @@
   color: #07C160;
 }
 
-.wechat-nav-item img {
-  width: 24px;
-  height: 24px;
-  margin-bottom: 4px;
+.wechat-nav-item .icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 4px;
+    background-size: contain; /* 确保图标完整显示 */
+    background-repeat: no-repeat;
+    background-position: center;
 }
 
-/* 拖拽样式 */
-.draggable {
-  cursor: move;
+.wechat-nav-item .icon.chat {
+    background-image: url('../images/chat-icon.png');
+}
+
+.wechat-nav-item .icon.contacts {
+    background-image: url('../images/contacts-icon.png');
+}
+
+.wechat-nav-item .icon.discover {
+    background-image: url('../images/discover-icon.png');
+}
+
+.wechat-nav-item .icon.me {
+    background-image: url('../images/me-icon.png');
 }
