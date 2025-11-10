@@ -344,13 +344,17 @@ class WeChatPhone {
         const send = document.getElementById('chat-send');
         const messages = content.querySelector('.messages');
 
-        const pushMyMsg = (text) => {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-            wrap.innerHTML = `<div style="max-width:70%;padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${text}</div>`;
-            messages.appendChild(wrap);
-            messages.scrollTop = messages.scrollHeight;
-        };
+        const pushMyMsg = (text, targetId) => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const idLine = (targetId !== undefined && targetId !== null)
+    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+    : '';
+  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+};
 
         send.addEventListener('click', () => {
             const val = (input.value || '').trim();
@@ -659,26 +663,78 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const send = document.getElementById('chat-send');
     const messages = content.querySelector('.messages');
 
-    const pushMyMsg = (text) => {
-      const wrap = document.createElement('div');
-      wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-      wrap.innerHTML = `<div style="max-width:70%;padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${String(
-        text
-      )
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')}</div>`;
-      messages.appendChild(wrap);
-      messages.scrollTop = messages.scrollHeight;
+// 根据设置推导“目标ID”（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
+function deriveTargetId(raw) {
+  try {
+    const st = window.SillyTavern?.getContext?.();
+    const setns = st?.extensionSettings?.wechat_simulator || {};
+    const source = String(setns.idSource ?? 'characterId');
+
+    const resolveCustomPath = (ctx, path) => {
+      try {
+        if (!path) return '';
+        // 提供 currentChatId 方便表达式直接取用
+        const currentChatId = ctx?.getCurrentChatId?.() ?? ctx?.chatId;
+        // 允许从 ctx 上用点/下标访问：如 characters[characterId].name 或 currentChatId
+        // 注意：仅在本地页面内执行，用于 UI 前缀，不会发送到服务端执行代码
+        const fn = new Function('ctx', 'currentChatId', `
+          try { with(ctx) { return (${path}); } } catch(e){ return ''; }
+        `);
+        return fn(ctx, currentChatId);
+      } catch (_) { return ''; }
     };
 
+    switch (source) {
+      case 'characterId': {
+        if (st?.characterId !== undefined && st?.characterId !== null) return String(st.characterId);
+        break;
+      }
+      case 'chatId': {
+        const cid = st?.getCurrentChatId?.() ?? st?.chatId;
+        if (cid !== undefined && cid !== null) return String(cid);
+        break;
+      }
+      case 'characterName': {
+        const name = st?.characters?.[st?.characterId]?.name;
+        if (name) return String(name);
+        break;
+      }
+      case 'customPath': {
+        const p = String(setns.customIdPath ?? '').trim();
+        const val = resolveCustomPath(st || {}, p);
+        if (val !== undefined && val !== null && String(val).length) return String(val);
+        break;
+      }
+    }
+  } catch (_) { /* ignore */ void 0; }
+  // 回退：char:<cid> -> cid；否则 raw；最后 'current'
+  try {
+    if (raw && typeof raw === 'string' && raw.startsWith('char:')) return raw.split(':')[1];
+  } catch (_) { /* ignore */ void 0; }
+  return String(raw || 'current');
+}
+    const pushMyMsg = (text, targetId) => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const idLine = (targetId !== undefined && targetId !== null)
+    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+    : '';
+  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+};
+
     // 自动侦测 ST 输入区与发送按钮并尝试发送；失败则回退本地回显
-    function trySendToSillyTavern(text) {
+    function trySendToSillyTavern(text, rawChatId) {
       try {
-        // 允许通过设置开关（默认 true）：若没有设置对象也视为启用
         const st = window.SillyTavern?.getContext?.();
         const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
         const allowAuto = (autoSend === undefined) ? true : !!autoSend;
         if (!allowAuto) return false;
+
+        const targetId = deriveTargetId(rawChatId);
+        const outbound = `发送给id:${targetId}\n\n${text}`;
 
         // 常见输入框/按钮选择器集合（优先级从高到低）
         const inputSelectors = [
@@ -695,12 +751,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           '.send_button', '.send-btn', 'button.send'
         ];
 
-        const inputEl = inputSelectors
-          .map(sel => document.querySelector(sel))
-          .find(Boolean);
-        const buttonEl = buttonSelectors
-          .map(sel => document.querySelector(sel))
-          .find(Boolean);
+        const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+        const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
 
         if (!inputEl) {
           // 兜底：尝试找到页面里唯一可见的大 textarea
@@ -708,7 +760,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
           if (guess) {
             guess.focus();
-            guess.value = text;
+            guess.value = outbound;
             guess.dispatchEvent(new Event('input', { bubbles: true }));
             // 回车尝试提交
             guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -719,7 +771,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
         // 写入文本并触发 input
         inputEl.focus();
-        inputEl.value = text;
+        inputEl.value = outbound;
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
 
         // 优先点击按钮；若无按钮则模拟回车
@@ -739,11 +791,13 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const val = (input.value || '').trim();
       if (!val) return;
 
-      // 先尝试发送到 SillyTavern；失败再本地回显
-      const sent = trySendToSillyTavern(val);
-      if (!sent) {
-        pushMyMsg(val);
-      }
+      const targetId = deriveTargetId(chatId);
+      // 本地立即回显（带目标 id）
+      pushMyMsg(val, targetId);
+
+      // 发送到 SillyTavern（带“发送给id:xxx”前缀与空行）
+      trySendToSillyTavern(val, chatId);
+
       input.value = '';
     });
     input.addEventListener('keydown', (e) => {
@@ -1086,20 +1140,67 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const send = document.getElementById('chat-send');
       const messages = content.querySelector('.messages');
 
-      const pushMyMsg = (text) => {
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-        wrap.innerHTML = `<div style="max-width:70%;padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`;
-        messages.appendChild(wrap);
-        messages.scrollTop = messages.scrollHeight;
-      };
+      const pushMyMsg = (text, targetId) => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const idLine = (targetId !== undefined && targetId !== null)
+    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+    : '';
+  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+  messages.appendChild(wrap);
+  messages.scrollTop = messages.scrollHeight;
+};
 
       send.addEventListener('click', () => {
         const val = (input.value || '').trim();
         if (!val) return;
-        pushMyMsg(val);
+        const targetId = deriveTargetId(chatId);
+        pushMyMsg(val, targetId);
         input.value = '';
-        // TODO: 后续可桥接 ST 输入框/发送 API
+
+        // 发送到 SillyTavern（带“发送给id:xxx”前缀与空行）
+        try {
+          const st = window.SillyTavern?.getContext?.();
+          const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
+          const allowAuto = (autoSend === undefined) ? true : !!autoSend;
+          if (allowAuto) {
+            const outbound = `发送给id:${targetId}\n\n${val}`;
+            const inputSelectors = [
+              '#send_textarea', 'textarea#send_textarea',
+              'textarea[name="send_textarea"]',
+              '[data-testid="send-textarea"]',
+              'textarea#sendText', 'textarea[name="sendText"]',
+              '.send-textarea textarea', '.send-textarea'
+            ];
+            const buttonSelectors = [
+              '#send_but', 'button#send_but',
+              '[data-testid="send-button"]',
+              'button[aria-label="Send"]',
+              '.send_button', '.send-btn', 'button.send'
+            ];
+            const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+            const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+            if (inputEl) {
+              inputEl.focus();
+              inputEl.value = outbound;
+              inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+              if (buttonEl) { buttonEl.click(); }
+              else { inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+            } else {
+              const all = Array.from(document.querySelectorAll('textarea'));
+              const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
+              if (guess) {
+                guess.focus();
+                guess.value = outbound;
+                guess.dispatchEvent(new Event('input', { bubbles: true }));
+                guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[WeChat Simulator] override send bridge failed:', e);
+        }
       });
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') send.click();
