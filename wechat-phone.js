@@ -503,11 +503,14 @@ class WeChatPhone {
       { from: 'other', text: chat?.last || '一起学习？' },
     ];
 
-    // 合并本地存储消息（demo + 本地）
+    // 合并本地存储消息（优先使用本地；否则回退 demo）
     const msgsToRender = (function () {
       try {
         const store = window.wechatLocalStore?.get?.();
         const st = window.SillyTavern?.getContext?.();
+
+        // 计算可能的键集合：真实会话ID映射 + 角色占位键
+        const keys = [];
         const effectiveId = (function () {
           try {
             if (chat?.id && String(chat.id).startsWith('char:')) {
@@ -519,8 +522,22 @@ class WeChatPhone {
           }
           return String(chat?.id || 'current');
         })();
-        const localArr = store?.messagesByChatId?.[effectiveId] || [];
-        return demoMsgs.concat(localArr);
+        keys.push(effectiveId);
+        try {
+          if (chat?.id && String(chat.id).startsWith('char:')) {
+            keys.push(String(chat.id));
+          }
+        } catch (e) {
+          /* ignore */
+        }
+
+        const merged = [];
+        for (const k of keys) {
+          const arr = store?.messagesByChatId?.[k] || [];
+          if (Array.isArray(arr) && arr.length) merged.push(...arr);
+        }
+
+        return merged.length ? merged : demoMsgs;
       } catch (e) {
         return demoMsgs;
       }
@@ -996,10 +1013,12 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
     this.setTitle(chatName);
 
-    // 合并本地消息（动态渲染版本）
+    // 合并本地消息（动态渲染版本：叠加本地到上下文消息上）
     try {
       const store = window.wechatLocalStore?.get?.();
       const st = window.SillyTavern?.getContext?.();
+      const keys = [];
+
       const effectiveId = (function () {
         try {
           if (chatId && String(chatId).startsWith('char:')) {
@@ -1011,9 +1030,23 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         }
         return String(chatId || 'current');
       })();
-      const localArr = store?.messagesByChatId?.[effectiveId] || [];
-      if (Array.isArray(localArr) && localArr.length) {
-        msgs = msgs.concat(localArr);
+
+      keys.push(effectiveId);
+      try {
+        if (chatId && String(chatId).startsWith('char:')) {
+          keys.push(String(chatId));
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
+      const mergedLocal = [];
+      for (const k of keys) {
+        const arr = store?.messagesByChatId?.[k] || [];
+        if (Array.isArray(arr) && arr.length) mergedLocal.push(...arr);
+      }
+      if (mergedLocal.length) {
+        msgs = msgs.concat(mergedLocal);
       }
     } catch (e) {
       /* ignore */
@@ -1532,6 +1565,49 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       if (!msgs.length && ctx && ctx.ready && ctx.messagesByChatId) {
         msgs = ctx.messagesByChatId[chatId] || [];
       }
+
+      // 叠加或替换为本地消息
+      try {
+        const store = window.wechatLocalStore?.get?.();
+        const st = window.SillyTavern?.getContext?.();
+        const keys = [];
+        const effectiveId = (function () {
+          try {
+            if (chatId && String(chatId).startsWith('char:')) {
+              const cur = st?.getCurrentChatId?.();
+              return String(cur || chatId);
+            }
+          } catch (e) {
+            /* ignore */
+          }
+          return String(chatId || 'current');
+        })();
+
+        keys.push(effectiveId);
+        try {
+          if (chatId && String(chatId).startsWith('char:')) {
+            keys.push(String(chatId));
+          }
+        } catch (e) {
+          /* ignore */
+        }
+
+        const mergedLocal = [];
+        for (const k of keys) {
+          const arr = store?.messagesByChatId?.[k] || [];
+          if (Array.isArray(arr) && arr.length) mergedLocal.push(...arr);
+        }
+
+        if (!msgs.length && mergedLocal.length) {
+          msgs = mergedLocal;
+        } else if (mergedLocal.length) {
+          msgs = msgs.concat(mergedLocal);
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
+      // 若仍为空，则仅此时使用演示消息
       if (!msgs.length) {
         msgs = [
           { from: 'other', text: '你好～' },
@@ -1825,12 +1901,49 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       return String(raw || 'current');
     }
   }
+
+  // 稳定角色键：返回 'char:<characterId>'，用于分类与列表预览
+  function getCharKey() {
+    try {
+      const st = window.SillyTavern?.getContext?.();
+      if (st && st.characterId !== undefined && st.characterId !== null) {
+        return `char:${String(st.characterId)}`;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return '';
+  }
+
+  // 列表预览用的键解析：char: 开头直接用；否则回退到规范化后的真实会话ID
+  function resolveOverlayKey(raw) {
+    try {
+      if (raw && typeof raw === 'string' && raw.startsWith('char:')) {
+        return String(raw);
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return normalizeChatKey(raw);
+  }
+
   function appendLocalMessage(chatId, from, text, ts = Date.now()) {
-    const key = normalizeChatKey(chatId);
     const store = getWeChatLocalStore();
-    if (!store.messagesByChatId[key]) store.messagesByChatId[key] = [];
-    store.messagesByChatId[key].push({ from, text, ts });
-    store.lastByChatId[key] = { text, ts };
+    const keys = [];
+
+    // 主键：真实会话ID（或映射后的 current）
+    const mainKey = normalizeChatKey(chatId);
+    keys.push(mainKey);
+
+    // 角色稳定键：char:<cid>（若可获取），用于“按角色分类”的稳定预览
+    const cKey = getCharKey();
+    if (cKey) keys.push(cKey);
+
+    for (const k of keys) {
+      if (!store.messagesByChatId[k]) store.messagesByChatId[k] = [];
+      store.messagesByChatId[k].push({ from, text, ts });
+      store.lastByChatId[k] = { text, ts };
+    }
     saveWeChatLocalStore(store);
   }
   function formatTimeShort(ts) {
@@ -1858,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const store = getWeChatLocalStore();
       items.forEach(el => {
         const id = el.getAttribute('data-id') || el.getAttribute('data-chat-id') || '';
-        const key = normalizeChatKey(id);
+        const key = resolveOverlayKey(id);
         const last = store.lastByChatId[key];
         if (last) {
           // time field (the small right-aligned text on first row)
