@@ -1,36 +1,36 @@
 // WeChat Phone Simulator - 模拟微信主界面和拖拽
 
 class WeChatPhone {
-    constructor() {
-        this.isVisible = false;
-        this.init();
-    }
+  constructor() {
+    this.isVisible = false;
+    this.init();
+  }
 
-    init() {
-        this.loadCSS();
-        this.createFrame();
-        this.bindNavEvents();
-        this.loadTabContent('chat'); // 默认加载聊天
-    }
+  init() {
+    this.loadCSS();
+    this.createFrame();
+    this.bindNavEvents();
+    this.loadTabContent('chat'); // 默认加载聊天
+  }
 
-    loadCSS() {
-        const cssLink = document.createElement('link');
-        cssLink.rel = 'stylesheet';
-        // 加上时间戳强制刷新，避免浏览器缓存旧样式（底栏图标仍显示截图的问题）
-        const ts = Date.now();
-        cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css?v=${ts}`;
-        document.head.appendChild(cssLink);
-    }
+  loadCSS() {
+    const cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    // 加上时间戳强制刷新，避免浏览器缓存旧样式（底栏图标仍显示截图的问题）
+    const ts = Date.now();
+    cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css?v=${ts}`;
+    document.head.appendChild(cssLink);
+  }
 
-    createFrame() {
-        const frame = document.createElement('div');
-        frame.id = 'wechat-frame';
-        frame.style.display = 'none'; // 默认隐藏
-        frame.style.position = 'fixed'; // 确保使用fixed定位
-        frame.style.zIndex = '10000'; // 确保z-index足够高
-        document.body.appendChild(frame);
+  createFrame() {
+    const frame = document.createElement('div');
+    frame.id = 'wechat-frame';
+    frame.style.display = 'none'; // 默认隐藏
+    frame.style.position = 'fixed'; // 确保使用fixed定位
+    frame.style.zIndex = '10000'; // 确保z-index足够高
+    document.body.appendChild(frame);
 
-        frame.innerHTML = `
+    frame.innerHTML = `
             <div class="wechat-status-bar">
                 <span class="time">10:00</span>
                 <div class="icons">
@@ -67,11 +67,11 @@ class WeChatPhone {
             </div>
         `;
 
-        // 强制覆盖图标为 Emoji（避免旧样式或缓存造成的位图图标残留）
-        (function injectEmojiIconStyle() {
-            const styleFix = document.createElement('style');
-            styleFix.setAttribute('data-wechat-style-fix', 'emoji-icons');
-            styleFix.textContent = `
+    // 强制覆盖图标为 Emoji（避免旧样式或缓存造成的位图图标残留）
+    (function injectEmojiIconStyle() {
+      const styleFix = document.createElement('style');
+      styleFix.setAttribute('data-wechat-style-fix', 'emoji-icons');
+      styleFix.textContent = `
             .wechat-nav-item .icon { background-image: none !important; }
             .wechat-nav-item .icon::after {
               display: block;
@@ -100,120 +100,207 @@ class WeChatPhone {
               line-height: 24px;
               font-size: 18px;
             }`;
-            // 若之前已注入，先移除再注入，确保最新生效
-            try {
-                const old = document.querySelector('style[data-wechat-style-fix="emoji-icons"]');
-                if (old) old.remove();
-            } catch (e) { /* ignore */ }
-            document.head.appendChild(styleFix);
-        })();
+      // 若之前已注入，先移除再注入，确保最新生效
+      try {
+        const old = document.querySelector('style[data-wechat-style-fix="emoji-icons"]');
+        if (old) old.remove();
+      } catch (e) {
+        /* ignore */
+      }
+      document.head.appendChild(styleFix);
+    })();
 
-        // 启用拖拽（以标题栏为手柄），并自动校正越界位置，防止“半个界面超出视口且无法拖拽”
-        try {
-            if (window.DragHelper) {
-                new window.DragHelper(frame, {
-                    boundary: document.documentElement,
-                    dragHandle: '.wechat-header',
-                    savePosition: true,
-                    storageKey: 'wechat-frame-pos',
-                    clickThreshold: 3,
-                    touchTimeout: 150,
-                });
-            }
-        } catch (e) { /* ignore */ }
-
-        const resetIfOffscreen = () => {
-            try {
-                const rect = frame.getBoundingClientRect();
-                const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
-                const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
-                // 显著越界：四周预留 10px 安全边距
-                if (rect.right < 10 || rect.bottom < 10 || rect.left > vw - 10 || rect.top > vh - 10) {
-                    // 清除已保存的位置，恢复到“居中 + 适配缩放”
-                    try { localStorage.removeItem('wechat-frame-pos'); } catch (e) { /* ignore */ }
-                    frame.style.left = '50%';
-                    frame.style.top = '50%';
-                    frame.style.transformOrigin = 'center center';
-                    // 交由 fitToViewport 重新计算 scale 与 translate
-                    fitToViewport();
-                }
-            } catch (e) { /* ignore */ }
-        };
-        // 初次校正 + 监听窗口变化
-        setTimeout(resetIfOffscreen, 0);
-        window.addEventListener('resize', resetIfOffscreen);
-
-        // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
-        // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
-        const BASE_W = 375;
-        const BASE_H = 812;
-
-        const fitToViewport = () => {
-            const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
-            const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
-            const safeW = Math.max(0, vw - 20); // 四边留白 10px
-            const safeH = Math.max(0, vh - 20);
-            const scale = Math.min(1, safeW / BASE_W, safeH / BASE_H);
-
-            frame.style.width = BASE_W + 'px';
-            frame.style.height = BASE_H + 'px';
-            frame.style.top = '50%';
-            frame.style.left = '50%';
-            frame.style.transformOrigin = 'center center';
-            frame.style.transform = `translate(-50%, -50%) scale(${scale})`;
-        };
-
-        fitToViewport();
-        window.addEventListener('resize', fitToViewport);
-        // 暴露给外部调试
-        this._fitToViewport = fitToViewport;
+    // 清理历史 frame 位置存档，防止上次拖拽残留导致越界（仅悬浮图标可拖拽，手机本体不拖拽）
+    try {
+      localStorage.removeItem('wechat-frame-pos');
+    } catch (e) {
+      /* ignore */
     }
 
-    bindNavEvents() {
-        const frame = document.getElementById('wechat-frame');
-        const navItems = frame.querySelectorAll('.wechat-nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', () => {
-                navItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                this.loadTabContent(item.dataset.tab);
-            });
+    // 启用拖拽（以标题栏为手柄），并自动校正越界位置，防止“半个界面超出视口且无法拖拽”
+    // 拖拽实例延后由 _setupOrUpdateDragHelper 按缩放状态决定是否启用
+    this._drag = null;
+
+    // 标题栏双击快速回中
+    try {
+      const hdr = frame.querySelector('.wechat-header');
+      if (hdr) {
+        hdr.addEventListener('dblclick', () => {
+          if (typeof this.recenter === 'function') this.recenter();
         });
-
-        // 顶部搜索按钮（占位搜索面板）
-        const searchBtn = frame.querySelector('.wechat-header .search');
-        if (searchBtn) {
-            searchBtn.addEventListener('click', () => {
-                if (typeof this.showSearchPanel === 'function') {
-                    this.showSearchPanel();
-                } else {
-                    const kw = prompt('搜索联系人/聊天：');
-                    if (kw && kw.trim()) {
-                        this.setTitle(`搜索: ${kw.trim()}`);
-                    }
-                }
-            });
-        }
-
-        // 顶部“＋”按钮（弹出菜单：发起群聊/添加朋友/扫一扫）
-        const addBtn = frame.querySelector('.wechat-header .add');
-        if (addBtn) {
-            addBtn.addEventListener('click', (e) => {
-                if (typeof this.toggleAddMenu === 'function') {
-                    this.toggleAddMenu(e);
-                }
-            });
-        }
+      }
+    } catch (e) {
+      /* ignore */
     }
 
-    // 简易搜索面板（占位版）
-    showSearchPanel() {
-        const frame = document.getElementById('wechat-frame');
-        let panel = frame.querySelector('#wechat-search-panel');
-        if (!panel) {
-            panel = document.createElement('div');
-            panel.id = 'wechat-search-panel';
-            panel.style.cssText = `
+    const resetIfOffscreen = () => {
+      try {
+        const rect = frame.getBoundingClientRect();
+        const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+        const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+        // 显著越界（任一边完全溢出或中心脱离视口）
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const out =
+          rect.right < 10 ||
+          rect.bottom < 10 ||
+          rect.left > vw - 10 ||
+          rect.top > vh - 10 ||
+          centerX < 0 ||
+          centerX > vw ||
+          centerY < 0 ||
+          centerY > vh;
+
+        if (out) {
+          if (typeof this.recenter === 'function') {
+            this.recenter();
+          } else {
+            frame.style.left = '50%';
+            frame.style.top = '50%';
+            frame.style.transformOrigin = 'center center';
+            fitToViewport();
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    };
+    // 初次校正 + 监听窗口变化
+    setTimeout(resetIfOffscreen, 0);
+    window.addEventListener('resize', resetIfOffscreen);
+
+    // ESC 键快速关闭
+    document.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape' && this.isVisible) {
+        this.toggle();
+      }
+    });
+
+    // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
+    // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
+    const BASE_W = 375;
+    const BASE_H = 812;
+
+    const fitToViewport = () => {
+      const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+      const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+      const safeW = Math.max(0, vw - 20); // 四边留白 10px
+      const safeH = Math.max(0, vh - 20);
+      const scale = Math.min(1, safeW / BASE_W, safeH / BASE_H);
+
+      frame.style.width = BASE_W + 'px';
+      frame.style.height = BASE_H + 'px';
+      frame.style.top = '50%';
+      frame.style.left = '50%';
+      frame.style.transformOrigin = 'center center';
+      // 记录当前缩放，供拖拽启停策略使用
+      this._currentScale = scale;
+      frame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    };
+
+    fitToViewport();
+    // 暴露给外部调试
+    this._fitToViewport = fitToViewport;
+
+    // 依据缩放状态启用/关闭拖拽，避免缩放(<1)时拖拽导致越界
+    this._setupOrUpdateDragHelper = () => {
+      try {
+        if (!window.DragHelper) return;
+        if (this._currentScale && this._currentScale < 0.999) {
+          if (this._drag && typeof this._drag.destroy === 'function') {
+            this._drag.destroy();
+          }
+          this._drag = null;
+          return;
+        }
+        if (!this._drag) {
+          this._drag = new window.DragHelper(frame, {
+            boundary: document.documentElement,
+            dragHandle: '.wechat-header',
+            savePosition: false,
+            clickThreshold: 3,
+            touchTimeout: 150,
+          });
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    };
+
+    // 提供公开方法：快速回中 + 重新适配
+    this.recenter = () => {
+      try {
+        localStorage.removeItem('wechat-frame-pos');
+      } catch (e) {
+        /* ignore */
+      }
+      frame.style.left = '50%';
+      frame.style.top = '50%';
+      frame.style.transformOrigin = 'center center';
+      fitToViewport();
+      if (this._setupOrUpdateDragHelper) {
+        this._setupOrUpdateDragHelper();
+      }
+    };
+
+    // 初始化拖拽状态，并在窗口变化时更新且防越界
+    if (this._setupOrUpdateDragHelper) {
+      this._setupOrUpdateDragHelper();
+    }
+    window.addEventListener('resize', () => {
+      fitToViewport();
+      if (this._setupOrUpdateDragHelper) {
+        this._setupOrUpdateDragHelper();
+      }
+      resetIfOffscreen();
+    });
+  }
+
+  bindNavEvents() {
+    const frame = document.getElementById('wechat-frame');
+    const navItems = frame.querySelectorAll('.wechat-nav-item');
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        navItems.forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        this.loadTabContent(item.dataset.tab);
+      });
+    });
+
+    // 顶部搜索按钮（占位搜索面板）
+    const searchBtn = frame.querySelector('.wechat-header .search');
+    if (searchBtn) {
+      searchBtn.addEventListener('click', () => {
+        if (typeof this.showSearchPanel === 'function') {
+          this.showSearchPanel();
+        } else {
+          const kw = prompt('搜索联系人/聊天：');
+          if (kw && kw.trim()) {
+            this.setTitle(`搜索: ${kw.trim()}`);
+          }
+        }
+      });
+    }
+
+    // 顶部“＋”按钮（弹出菜单：发起群聊/添加朋友/扫一扫）
+    const addBtn = frame.querySelector('.wechat-header .add');
+    if (addBtn) {
+      addBtn.addEventListener('click', e => {
+        if (typeof this.toggleAddMenu === 'function') {
+          this.toggleAddMenu(e);
+        }
+      });
+    }
+  }
+
+  // 简易搜索面板（占位版）
+  showSearchPanel() {
+    const frame = document.getElementById('wechat-frame');
+    let panel = frame.querySelector('#wechat-search-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'wechat-search-panel';
+      panel.style.cssText = `
                 position: absolute;
                 top: 64px;
                 left: 10px;
@@ -225,40 +312,40 @@ class WeChatPhone {
                 padding: 10px;
                 z-index: 10001;
             `;
-            panel.innerHTML = `
+      panel.innerHTML = `
                 <div style="display:flex;gap:8px;align-items:center;">
                     <input id="wechat-search-input" type="text" placeholder="搜索" style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
                     <button id="wechat-search-cancel" style="height:36px;padding:0 12px;border:none;background:#f0f0f0;border-radius:6px;cursor:pointer;">取消</button>
                 </div>
             `;
-            frame.appendChild(panel);
+      frame.appendChild(panel);
 
-            panel.querySelector('#wechat-search-cancel')?.addEventListener('click', () => {
-                panel.style.display = 'none';
-            });
+      panel.querySelector('#wechat-search-cancel')?.addEventListener('click', () => {
+        panel.style.display = 'none';
+      });
 
-            const input = panel.querySelector('#wechat-search-input');
-            input?.addEventListener('keydown', (ev) => {
-                if (ev.key === 'Enter') {
-                    const val = (input.value || '').trim();
-                    this.setTitle(val ? `搜索: ${val}` : '微信');
-                    panel.style.display = 'none';
-                }
-            });
-        } else {
-            panel.style.display = 'block';
+      const input = panel.querySelector('#wechat-search-input');
+      input?.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter') {
+          const val = (input.value || '').trim();
+          this.setTitle(val ? `搜索: ${val}` : '微信');
+          panel.style.display = 'none';
         }
-        this.setTitle('搜索');
+      });
+    } else {
+      panel.style.display = 'block';
     }
+    this.setTitle('搜索');
+  }
 
-    // 顶部“＋”菜单（占位版）
-    toggleAddMenu(evt) {
-        const frame = document.getElementById('wechat-frame');
-        let menu = frame.querySelector('#wechat-add-menu');
-        if (!menu) {
-            menu = document.createElement('div');
-            menu.id = 'wechat-add-menu';
-            menu.style.cssText = `
+  // 顶部“＋”菜单（占位版）
+  toggleAddMenu(evt) {
+    const frame = document.getElementById('wechat-frame');
+    let menu = frame.querySelector('#wechat-add-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'wechat-add-menu';
+      menu.style.cssText = `
                 position: absolute;
                 top: 54px;
                 right: 10px;
@@ -270,86 +357,88 @@ class WeChatPhone {
                 overflow: hidden;
                 z-index: 10001;
             `;
-            menu.innerHTML = `
+      menu.innerHTML = `
                 <div class="item" data-act="group" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">发起群聊</div>
                 <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友</div>
                 <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">扫一扫</div>
             `;
-            frame.appendChild(menu);
+      frame.appendChild(menu);
 
-            menu.addEventListener('click', (e) => {
-                const t = e.target;
-                if (!(t instanceof Element)) return;
-                const act = t.getAttribute('data-act');
-                switch (act) {
-                    case 'group':
-                        alert('发起群聊（占位）');
-                        break;
-                    case 'add':
-                        alert('添加朋友（占位）');
-                        break;
-                    case 'scan':
-                        alert('扫一扫（占位）');
-                        break;
-                }
-                this.closeAddMenu();
-            });
+      menu.addEventListener('click', e => {
+        const t = e.target;
+        if (!(t instanceof Element)) return;
+        const act = t.getAttribute('data-act');
+        switch (act) {
+          case 'group':
+            alert('发起群聊（占位）');
+            break;
+          case 'add':
+            alert('添加朋友（占位）');
+            break;
+          case 'scan':
+            alert('扫一扫（占位）');
+            break;
         }
-        menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
-
-        // 点击外部关闭
-        const handleOutside = (ev) => {
-            if (!menu) return;
-            if (!menu.contains(ev.target)) {
-                this.closeAddMenu();
-                document.removeEventListener('mousedown', handleOutside, true);
-                document.removeEventListener('touchstart', handleOutside, true);
-            }
-        };
-        document.addEventListener('mousedown', handleOutside, true);
-        document.addEventListener('touchstart', handleOutside, true);
+        this.closeAddMenu();
+      });
     }
+    menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
 
-    closeAddMenu() {
-        const frame = document.getElementById('wechat-frame');
-        const menu = frame?.querySelector('#wechat-add-menu');
-        if (menu) menu.style.display = 'none';
+    // 点击外部关闭
+    const handleOutside = ev => {
+      if (!menu) return;
+      if (!menu.contains(ev.target)) {
+        this.closeAddMenu();
+        document.removeEventListener('mousedown', handleOutside, true);
+        document.removeEventListener('touchstart', handleOutside, true);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside, true);
+    document.addEventListener('touchstart', handleOutside, true);
+  }
+
+  closeAddMenu() {
+    const frame = document.getElementById('wechat-frame');
+    const menu = frame?.querySelector('#wechat-add-menu');
+    if (menu) menu.style.display = 'none';
+  }
+
+  loadTabContent(tab) {
+    const content = document.getElementById('wechat-content');
+    switch (tab) {
+      case 'chat':
+        this.setTitle('微信');
+        this.renderChatList();
+        break;
+      case 'contacts':
+        this.setTitle('通讯录');
+        this.renderContacts();
+        break;
+      case 'discover':
+        this.setTitle('发现');
+        this.renderDiscover();
+        break;
+      case 'me':
+        this.setTitle('我');
+        this.renderMe();
+        break;
     }
+  }
 
-    loadTabContent(tab) {
-        const content = document.getElementById('wechat-content');
-        switch (tab) {
-            case 'chat':
-                this.setTitle('微信');
-                this.renderChatList();
-                break;
-            case 'contacts':
-                this.setTitle('通讯录');
-                this.renderContacts();
-                break;
-            case 'discover':
-                this.setTitle('发现');
-                this.renderDiscover();
-                break;
-            case 'me':
-                this.setTitle('我');
-                this.renderMe();
-                break;
-        }
-    }
+  // 占位版：聊天列表（可点击进入会话详情）
+  renderChatList() {
+    const content = document.getElementById('wechat-content');
+    const demoChats = [
+      { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
+      { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
+      { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
+    ];
 
-    // 占位版：聊天列表（可点击进入会话详情）
-    renderChatList() {
-        const content = document.getElementById('wechat-content');
-        const demoChats = [
-            { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
-            { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
-            { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
-        ];
-
-        content.innerHTML = `
+    content.innerHTML = `
             <div class="chat-list">
-                ${demoChats.map(c => `
+                ${demoChats
+                  .map(
+                    c => `
                   <div class="chat-item" data-id="${c.id}" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
                     <div class="avatar" style="width:44px;height:44px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:12px;">
                       ${c.avatar}
@@ -365,73 +454,92 @@ class WeChatPhone {
                       </div>
                     </div>
                   </div>
-                `).join('')}
+                `,
+                  )
+                  .join('')}
             </div>
         `;
 
-        // 绑定点击进入聊天详情（角色占位会话尝试切换到对应角色）
-        content.querySelectorAll('.chat-item').forEach(el => {
-            el.addEventListener('click', async () => {
-                const id = el.getAttribute('data-id');
-                const chat = demoChats.find(c => c.id === id) || { id, name: el.getAttribute('data-name') || '聊天' };
+    // 绑定点击进入聊天详情（角色占位会话尝试切换到对应角色）
+    content.querySelectorAll('.chat-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.getAttribute('data-id');
+        const chat = demoChats.find(c => c.id === id) || { id, name: el.getAttribute('data-name') || '聊天' };
 
-                // 如果是角色占位：尝试切换到对应角色并刷新
-                if (id && id.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
-                    const cid = id.split(':')[1];
-                    const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
-                    if (switched && window.refreshWeChatContext) {
-                        await window.refreshWeChatContext();
-                    }
-                }
+        // 如果是角色占位：尝试切换到对应角色并刷新
+        if (
+          id &&
+          id.startsWith('char:') &&
+          window.WeChatSwitch &&
+          typeof window.WeChatSwitch.trySwitchToCharacter === 'function'
+        ) {
+          const cid = id.split(':')[1];
+          const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
+          if (switched && window.refreshWeChatContext) {
+            await window.refreshWeChatContext();
+          }
+        }
 
-                this.renderChatDetail(chat);
-            });
-        });
+        this.renderChatDetail(chat);
+      });
+    });
 
-        // 根据本地存储刷新列表摘要与时间
-        try { window.wechatLocalStore?.updateList?.(content); } catch (e) { /* ignore */ }
+    // 根据本地存储刷新列表摘要与时间
+    try {
+      window.wechatLocalStore?.updateList?.(content);
+    } catch (e) {
+      /* ignore */
     }
+  }
 
-    // 占位版：聊天详情（简单消息 + 输入框）
-    renderChatDetail(chat) {
-        const content = document.getElementById('wechat-content');
-        this.setTitle(chat?.name || '聊天');
+  // 占位版：聊天详情（简单消息 + 输入框）
+  renderChatDetail(chat) {
+    const content = document.getElementById('wechat-content');
+    this.setTitle(chat?.name || '聊天');
 
-        const demoMsgs = [
-            { from: 'other', text: '你好～' },
-            { from: 'me', text: '你好，有什么事吗？' },
-            { from: 'other', text: chat?.last || '一起学习？' },
-        ];
+    const demoMsgs = [
+      { from: 'other', text: '你好～' },
+      { from: 'me', text: '你好，有什么事吗？' },
+      { from: 'other', text: chat?.last || '一起学习？' },
+    ];
 
-        // 合并本地存储消息（demo + 本地）
-        let msgsToRender = (function() {
+    // 合并本地存储消息（demo + 本地）
+    const msgsToRender = (function () {
+      try {
+        const store = window.wechatLocalStore?.get?.();
+        const st = window.SillyTavern?.getContext?.();
+        const effectiveId = (function () {
           try {
-            const store = window.wechatLocalStore?.get?.();
-            const st = window.SillyTavern?.getContext?.();
-            const effectiveId = (function(){
-              try {
-                if (chat?.id && String(chat.id).startsWith('char:')) {
-                  const cur = st?.getCurrentChatId?.();
-                  return String(cur || chat.id);
-                }
-              } catch(e){}
-              return String(chat?.id || 'current');
-            })();
-            const localArr = store?.messagesByChatId?.[effectiveId] || [];
-            return demoMsgs.concat(localArr);
-          } catch(e) { return demoMsgs; }
+            if (chat?.id && String(chat.id).startsWith('char:')) {
+              const cur = st?.getCurrentChatId?.();
+              return String(cur || chat.id);
+            }
+          } catch (e) {
+            /* ignore */
+          }
+          return String(chat?.id || 'current');
         })();
+        const localArr = store?.messagesByChatId?.[effectiveId] || [];
+        return demoMsgs.concat(localArr);
+      } catch (e) {
+        return demoMsgs;
+      }
+    })();
 
-        content.innerHTML = `
+    content.innerHTML = `
             <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
                 <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
-                    ${msgsToRender.map(m => `
+                    ${msgsToRender
+                      .map(
+                        m => `
                         <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                             ${m.text}
                           </div>
                         </div>
-                    `).join('')}
+                    `,
+                      )
+                      .join('')}
                 </div>
                 <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
                     <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
@@ -440,152 +548,179 @@ class WeChatPhone {
             </div>
         `;
 
-        const input = document.getElementById('chat-input');
-        const send = document.getElementById('chat-send');
-        const messages = content.querySelector('.messages');
+    const input = document.getElementById('chat-input');
+    const send = document.getElementById('chat-send');
+    const messages = content.querySelector('.messages');
 
-        const pushMyMsg = (text, targetId) => {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const idLine = (targetId !== undefined && targetId !== null)
-    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
-    : '';
-  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
-  messages.appendChild(wrap);
-  messages.scrollTop = messages.scrollHeight;
-};
+    const pushMyMsg = (text, targetId) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+      const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const idLine =
+        targetId !== undefined && targetId !== null
+          ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+          : '';
+      wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
+    };
 
-        send.addEventListener('click', () => {
-            const val = (input.value || '').trim();
-            if (!val) return;
+    send.addEventListener('click', () => {
+      const val = (input.value || '').trim();
+      if (!val) return;
 
-            // 计算目标ID（遵循设置：characterId/chatId/characterName/customPath）
-            let targetId = '';
-            try {
-                const st = window.SillyTavern?.getContext?.() || {};
-                const setns = st.extensionSettings?.wechat_simulator || {};
-                const source = String(setns.idSource ?? 'characterId');
-                const currentChatId = st.getCurrentChatId?.() ?? st.chatId;
+      // 计算目标ID（遵循设置：characterId/chatId/characterName/customPath）
+      let targetId = '';
+      try {
+        const st = window.SillyTavern?.getContext?.() || {};
+        const setns = st.extensionSettings?.wechat_simulator || {};
+        const source = String(setns.idSource ?? 'characterId');
+        const currentChatId = st.getCurrentChatId?.() ?? st.chatId;
 
-                const resolveCustomPath = (ctx, path) => {
-                    try {
-                        if (!path) return '';
-                        const fn = new Function('ctx', 'currentChatId', `
+        const resolveCustomPath = (ctx, path) => {
+          try {
+            if (!path) return '';
+            const fn = new Function(
+              'ctx',
+              'currentChatId',
+              `
                           try { with(ctx) { return (${path}); } } catch(e){ return ''; }
-                        `);
-                        return fn(ctx, currentChatId);
-                    } catch (e) { return ''; }
-                };
-
-                switch (source) {
-                    case 'characterId':
-                        if (st.characterId !== undefined && st.characterId !== null) targetId = String(st.characterId);
-                        break;
-                    case 'chatId':
-                        if (currentChatId !== undefined && currentChatId !== null) targetId = String(currentChatId);
-                        break;
-                    case 'characterName':
-                        targetId = st.characters?.[st.characterId]?.name ?? '';
-                        break;
-                    case 'customPath': {
-                        const p = String(setns.customIdPath ?? '').trim();
-                        targetId = resolveCustomPath(st, p) || '';
-                        break;
-                    }
-                }
-            } catch (e) { /* ignore */ }
-
-            // 兜底：char:<cid> 或 raw id 或 'current'
-            if (!targetId) {
-                try {
-                    if (chat?.id && String(chat.id).startsWith('char:')) {
-                        targetId = String(chat.id).split(':')[1];
-                    } else {
-                        targetId = String(chat?.id ?? 'current');
-                    }
-                } catch (e) { targetId = 'current'; }
-            }
-
-            // 本地回显带 id 行
-            pushMyMsg(val, targetId);
-            input.value = '';
-
-            // 注入到 ST（前缀：发送给id:{id}\\n\\n正文）
-            try {
-                const outbound = `发送给id:${targetId}\n\n${val}`;
-                const inputSelectors = [
-                    '#send_textarea', 'textarea#send_textarea',
-                    'textarea[name="send_textarea"]',
-                    '[data-testid="send-textarea"]',
-                    'textarea#sendText', 'textarea[name="sendText"]',
-                    '.send-textarea textarea', '.send-textarea'
-                ];
-                const buttonSelectors = [
-                    '#send_but', 'button#send_but',
-                    '[data-testid="send-button"]',
-                    'button[aria-label="Send"]',
-                    '.send_button', '.send-btn', 'button.send'
-                ];
-                const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
-                const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
-                if (inputEl) {
-                    inputEl.focus();
-                    inputEl.value = outbound;
-                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-                    if (buttonEl) {
-                        buttonEl.click();
-                    } else {
-                        inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-                    }
-                } else {
-                    const all = Array.from(document.querySelectorAll('textarea'));
-                    const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
-                    if (guess) {
-                        guess.focus();
-                        guess.value = outbound;
-                        guess.dispatchEvent(new Event('input', { bubbles: true }));
-                        guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-                    }
-                }
-            } catch (e) { /* ignore */ }
-        });
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                send.click();
-            }
-        });
-    }
-
-    // 占位版：通讯录
-    renderContacts() {
-        const content = document.getElementById('wechat-content');
-        const groups = {
-            'A': ['阿强', '阿美'],
-            'B': ['白露', '冰冰'],
-            'C': ['陈晨', '超人'],
+                        `,
+            );
+            return fn(ctx, currentChatId);
+          } catch (e) {
+            return '';
+          }
         };
-        content.innerHTML = `
+
+        switch (source) {
+          case 'characterId':
+            if (st.characterId !== undefined && st.characterId !== null) targetId = String(st.characterId);
+            break;
+          case 'chatId':
+            if (currentChatId !== undefined && currentChatId !== null) targetId = String(currentChatId);
+            break;
+          case 'characterName':
+            targetId = st.characters?.[st.characterId]?.name ?? '';
+            break;
+          case 'customPath': {
+            const p = String(setns.customIdPath ?? '').trim();
+            targetId = resolveCustomPath(st, p) || '';
+            break;
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+
+      // 兜底：char:<cid> 或 raw id 或 'current'
+      if (!targetId) {
+        try {
+          if (chat?.id && String(chat.id).startsWith('char:')) {
+            targetId = String(chat.id).split(':')[1];
+          } else {
+            targetId = String(chat?.id ?? 'current');
+          }
+        } catch (e) {
+          targetId = 'current';
+        }
+      }
+
+      // 本地回显带 id 行
+      pushMyMsg(val, targetId);
+      input.value = '';
+
+      // 注入到 ST（前缀：发送给id:{id}\\n\\n正文）
+      try {
+        const outbound = `发送给id:${targetId}\n\n${val}`;
+        const inputSelectors = [
+          '#send_textarea',
+          'textarea#send_textarea',
+          'textarea[name="send_textarea"]',
+          '[data-testid="send-textarea"]',
+          'textarea#sendText',
+          'textarea[name="sendText"]',
+          '.send-textarea textarea',
+          '.send-textarea',
+        ];
+        const buttonSelectors = [
+          '#send_but',
+          'button#send_but',
+          '[data-testid="send-button"]',
+          'button[aria-label="Send"]',
+          '.send_button',
+          '.send-btn',
+          'button.send',
+        ];
+        const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+        const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.value = outbound;
+          inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+          if (buttonEl) {
+            buttonEl.click();
+          } else {
+            inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+          }
+        } else {
+          const all = Array.from(document.querySelectorAll('textarea'));
+          const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
+          if (guess) {
+            guess.focus();
+            guess.value = outbound;
+            guess.dispatchEvent(new Event('input', { bubbles: true }));
+            guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+          }
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        send.click();
+      }
+    });
+  }
+
+  // 占位版：通讯录
+  renderContacts() {
+    const content = document.getElementById('wechat-content');
+    const groups = {
+      A: ['阿强', '阿美'],
+      B: ['白露', '冰冰'],
+      C: ['陈晨', '超人'],
+    };
+    content.innerHTML = `
             <div class="contacts" style="background:#fff;">
-              ${Object.keys(groups).map(k => `
+              ${Object.keys(groups)
+                .map(
+                  k => `
                 <div class="group">
                   <div style="padding:6px 12px;background:#f7f7f7;color:#666;font-size:12px;">${k}</div>
-                  ${groups[k].map(n => `
+                  ${groups[k]
+                    .map(
+                      n => `
                     <div class="row" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;">
                         <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">😀</div>
                         <div style="font-size:15px;color:#111;">${n}</div>
                     </div>
-                  `).join('')}
+                  `,
+                    )
+                    .join('')}
                 </div>
-              `).join('')}
+              `,
+                )
+                .join('')}
             </div>
         `;
-    }
+  }
 
-    // 占位版：发现
-    renderDiscover() {
-        const content = document.getElementById('wechat-content');
-        content.innerHTML = `
+  // 占位版：发现
+  renderDiscover() {
+    const content = document.getElementById('wechat-content');
+    content.innerHTML = `
             <div class="discover" style="background:#f7f7f7;">
                 <div class="cell" id="discover-moments" style="display:flex;align-items:center;padding:12px 14px;background:#fff;border-bottom:1px solid #eee;cursor:pointer;">
                     <div style="width:28px;height:28px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">📸</div>
@@ -598,20 +733,22 @@ class WeChatPhone {
             </div>
         `;
 
-        const moments = document.getElementById('discover-moments');
-        const shop = document.getElementById('discover-shop');
+    const moments = document.getElementById('discover-moments');
+    const shop = document.getElementById('discover-shop');
 
-        if (moments) {
-            moments.addEventListener('click', () => {
-                // 若有外部模块则调用，否则渲染占位朋友圈
-                if (window.momentsApp && typeof window.momentsApp.renderMoments === 'function') {
-                    window.momentsApp.renderMoments();
-                } else {
-                    const c = document.getElementById('wechat-content');
-                    this.setTitle('朋友圈');
-                    c.innerHTML = `
+    if (moments) {
+      moments.addEventListener('click', () => {
+        // 若有外部模块则调用，否则渲染占位朋友圈
+        if (window.momentsApp && typeof window.momentsApp.renderMoments === 'function') {
+          window.momentsApp.renderMoments();
+        } else {
+          const c = document.getElementById('wechat-content');
+          this.setTitle('朋友圈');
+          c.innerHTML = `
                         <div style="background:#fff;">
-                          ${[1,2,3].map(i => `
+                          ${[1, 2, 3]
+                            .map(
+                              i => `
                              <div style="padding:12px 14px;border-bottom:1px solid #eee;">
                                <div style="display:flex;align-items:center;">
                                  <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:10px;">👤</div>
@@ -620,42 +757,48 @@ class WeChatPhone {
                                <div style="margin-top:8px;color:#222;line-height:20px;">今天的风真大，学习也要加油呀～</div>
                                <div style="margin-top:8px;color:#999;font-size:12px;">2分钟前</div>
                              </div>
-                          `).join('')}
+                          `,
+                            )
+                            .join('')}
                         </div>
                     `;
-                }
-            });
         }
+      });
+    }
 
-        if (shop) {
-            shop.addEventListener('click', () => {
-                if (window.shopApp && typeof window.shopApp.renderShop === 'function') {
-                    window.shopApp.renderShop();
-                } else {
-                    const c = document.getElementById('wechat-content');
-                    this.setTitle('商城');
-                    c.innerHTML = `
+    if (shop) {
+      shop.addEventListener('click', () => {
+        if (window.shopApp && typeof window.shopApp.renderShop === 'function') {
+          window.shopApp.renderShop();
+        } else {
+          const c = document.getElementById('wechat-content');
+          this.setTitle('商城');
+          c.innerHTML = `
                         <div style="background:#fff;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px;">
-                          ${[1,2,3,4].map(i => `
+                          ${[1, 2, 3, 4]
+                            .map(
+                              i => `
                             <div style="background:#fff;border:1px solid #eee;border-radius:8px;overflow:hidden;">
                               <div style="background:#eaeaea;height:90px;display:flex;align-items:center;justify-content:center;">🧩</div>
                               <div style="padding:8px 10px;">
                                 <div style="font-size:14px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">好物 ${i}</div>
-                                <div style="margin-top:4px;color:#07C160;font-weight:600;">¥ ${(i*9).toFixed(2)}</div>
+                                <div style="margin-top:4px;color:#07C160;font-weight:600;">¥ ${(i * 9).toFixed(2)}</div>
                               </div>
                             </div>
-                          `).join('')}
+                          `,
+                            )
+                            .join('')}
                         </div>
                     `;
-                }
-            });
         }
+      });
     }
+  }
 
-    // 占位版：我
-    renderMe() {
-        const content = document.getElementById('wechat-content');
-        content.innerHTML = `
+  // 占位版：我
+  renderMe() {
+    const content = document.getElementById('wechat-content');
+    content.innerHTML = `
             <div class="me" style="background:#f7f7f7;">
               <div style="display:flex;align-items:center;padding:16px;background:#fff;border-bottom:1px solid #eee;">
                 <div style="width:54px;height:54px;border-radius:10px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">🙂</div>
@@ -667,44 +810,60 @@ class WeChatPhone {
               </div>
               <div style="height:10px;"></div>
               ${[
-                { icon:'💰', text:'服务' },
-                { icon:'⭐', text:'收藏' },
-                { icon:'🖼️', text:'相册' },
-                { icon:'😊', text:'表情' },
-                { icon:'⚙️', text:'设置' }
-              ].map(it => `
+                { icon: '💰', text: '服务' },
+                { icon: '⭐', text: '收藏' },
+                { icon: '🖼️', text: '相册' },
+                { icon: '😊', text: '表情' },
+                { icon: '⚙️', text: '设置' },
+              ]
+                .map(
+                  it => `
                 <div style="display:flex;align-items:center;padding:12px 14px;background:#fff;border-bottom:1px solid #eee;cursor:pointer;">
                   <div style="width:28px;height:28px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">${it.icon}</div>
                   <div style="flex:1;color:#111;">${it.text}</div>
                   <div style="color:#ccc;">›</div>
                 </div>
-              `).join('')}
+              `,
+                )
+                .join('')}
             </div>
         `;
-    }
+  }
 
-    setTitle(title) {
-        const titleEl = document.querySelector('.wechat-header .title');
-        if (titleEl) {
-            titleEl.textContent = title;
-        }
+  setTitle(title) {
+    const titleEl = document.querySelector('.wechat-header .title');
+    if (titleEl) {
+      titleEl.textContent = title;
     }
+  }
 
-    toggle() {
-        const frame = document.getElementById('wechat-frame');
-        this.isVisible = !this.isVisible;
-        frame.style.display = this.isVisible ? 'flex' : 'none';
-        if (this.isVisible && typeof this.startClock === 'function') {
-            try { this.startClock(); } catch (e) { /* 忽略 */ }
-        }
+  toggle() {
+    const frame = document.getElementById('wechat-frame');
+    this.isVisible = !this.isVisible;
+    frame.style.display = this.isVisible ? 'flex' : 'none';
+    if (this.isVisible) {
+      try {
+        if (typeof this.recenter === 'function') this.recenter();
+        else if (typeof this._fitToViewport === 'function') this._fitToViewport();
+      } catch (e) {
+        /* ignore */
+      }
     }
+    if (this.isVisible && typeof this.startClock === 'function') {
+      try {
+        this.startClock();
+      } catch (e) {
+        /* 忽略 */
+      }
+    }
+  }
 }
 
 // 初始化微信界面
 function initWeChatPhone() {
-    if (!window.wechatPhone) {
-        window.wechatPhone = new WeChatPhone();
-    }
+  if (!window.wechatPhone) {
+    window.wechatPhone = new WeChatPhone();
+  }
 }
 
 // 等待DOM加载
@@ -748,7 +907,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       <div class="chat-list">
         ${chats
           .map(
-            (c) => `
+            c => `
           <div class="chat-item" data-id="${c.id}" data-name="${c.name}" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
             <div class="avatar" style="width:44px;height:44px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:12px;">
               ${c.avatar || '🟢'}
@@ -764,20 +923,25 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
               </div>
             </div>
           </div>
-        `
+        `,
           )
           .join('')}
       </div>
     `;
 
     // 绑定点击进入聊天详情（角色占位会话尝试切换到对应角色）
-    content.querySelectorAll('.chat-item').forEach((el) => {
+    content.querySelectorAll('.chat-item').forEach(el => {
       el.addEventListener('click', async () => {
         const id = el.getAttribute('data-id');
         const name = el.getAttribute('data-name') || '聊天';
 
         // 如果是角色占位：尝试切换到对应角色并刷新
-        if (id && id.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
+        if (
+          id &&
+          id.startsWith('char:') &&
+          window.WeChatSwitch &&
+          typeof window.WeChatSwitch.trySwitchToCharacter === 'function'
+        ) {
           const cid = id.split(':')[1];
           const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
           if (switched && window.refreshWeChatContext) {
@@ -795,7 +959,11 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     });
 
     // 根据本地存储刷新列表摘要与时间
-    try { window.wechatLocalStore?.updateList?.(content); } catch (e) { /* ignore */ }
+    try {
+      window.wechatLocalStore?.updateList?.(content);
+    } catch (e) {
+      /* ignore */
+    }
 
     this.currentView = 'list';
     this.currentChatId = null;
@@ -812,8 +980,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     let msgs = Array.isArray(providedMessages) ? providedMessages : [];
     if (!msgs.length) {
       const ctx = window.wechatContext;
-    const st = window.SillyTavern?.getContext?.();
-    const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
+      const st = window.SillyTavern?.getContext?.();
+      const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
       if (ctx && ctx.ready && ctx.messagesByChatId && ctx.messagesByChatId[chatId]) {
         msgs = ctx.messagesByChatId[chatId];
       }
@@ -832,33 +1000,39 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     try {
       const store = window.wechatLocalStore?.get?.();
       const st = window.SillyTavern?.getContext?.();
-      const effectiveId = (function(){
+      const effectiveId = (function () {
         try {
           if (chatId && String(chatId).startsWith('char:')) {
             const cur = st?.getCurrentChatId?.();
             return String(cur || chatId);
           }
-        } catch(e){}
+        } catch (e) {
+          /* ignore */
+        }
         return String(chatId || 'current');
       })();
       const localArr = store?.messagesByChatId?.[effectiveId] || [];
       if (Array.isArray(localArr) && localArr.length) {
         msgs = msgs.concat(localArr);
       }
-    } catch(e){}
+    } catch (e) {
+      /* ignore */
+    }
 
     content.innerHTML = `
       <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
         <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
           ${msgs
             .map(
-              (m) => `
+              m => `
             <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
               <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
-                ${String(m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                ${String(m.text || '')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')}
               </div>
             </div>
-          `
+          `,
             )
             .join('')}
         </div>
@@ -873,74 +1047,85 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const send = document.getElementById('chat-send');
     const messages = content.querySelector('.messages');
 
-// 根据设置推导“目标ID”（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
-function deriveTargetId(raw) {
-  try {
-    const st = window.SillyTavern?.getContext?.();
-    const setns = st?.extensionSettings?.wechat_simulator || {};
-    const source = String(setns.idSource ?? 'characterId');
-
-    const resolveCustomPath = (ctx, path) => {
+    // 根据设置推导“目标ID”（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
+    function deriveTargetId(raw) {
       try {
-        if (!path) return '';
-        // 提供 currentChatId 方便表达式直接取用
-        const currentChatId = ctx?.getCurrentChatId?.() ?? ctx?.chatId;
-        // 允许从 ctx 上用点/下标访问：如 characters[characterId].name 或 currentChatId
-        // 注意：仅在本地页面内执行，用于 UI 前缀，不会发送到服务端执行代码
-        const fn = new Function('ctx', 'currentChatId', `
-          try { with(ctx) { return (${path}); } } catch(e){ return ''; }
-        `);
-        return fn(ctx, currentChatId);
-      } catch (_) { return ''; }
-    };
+        const st = window.SillyTavern?.getContext?.();
+        const setns = st?.extensionSettings?.wechat_simulator || {};
+        const source = String(setns.idSource ?? 'characterId');
 
-    switch (source) {
-      case 'characterId': {
-        if (st?.characterId !== undefined && st?.characterId !== null) return String(st.characterId);
-        break;
+        const resolveCustomPath = (ctx, path) => {
+          try {
+            if (!path) return '';
+            // 提供 currentChatId 方便表达式直接取用
+            const currentChatId = ctx?.getCurrentChatId?.() ?? ctx?.chatId;
+            // 允许从 ctx 上用点/下标访问：如 characters[characterId].name 或 currentChatId
+            // 注意：仅在本地页面内执行，用于 UI 前缀，不会发送到服务端执行代码
+            const fn = new Function(
+              'ctx',
+              'currentChatId',
+              `
+          try { with(ctx) { return (${path}); } } catch(e){ return ''; }
+        `,
+            );
+            return fn(ctx, currentChatId);
+          } catch (_) {
+            return '';
+          }
+        };
+
+        switch (source) {
+          case 'characterId': {
+            if (st?.characterId !== undefined && st?.characterId !== null) return String(st.characterId);
+            break;
+          }
+          case 'chatId': {
+            const cid = st?.getCurrentChatId?.() ?? st?.chatId;
+            if (cid !== undefined && cid !== null) return String(cid);
+            break;
+          }
+          case 'characterName': {
+            const name = st?.characters?.[st?.characterId]?.name;
+            if (name) return String(name);
+            break;
+          }
+          case 'customPath': {
+            const p = String(setns.customIdPath ?? '').trim();
+            const val = resolveCustomPath(st || {}, p);
+            if (val !== undefined && val !== null && String(val).length) return String(val);
+            break;
+          }
+        }
+      } catch (_) {
+        /* ignore */ void 0;
       }
-      case 'chatId': {
-        const cid = st?.getCurrentChatId?.() ?? st?.chatId;
-        if (cid !== undefined && cid !== null) return String(cid);
-        break;
+      // 回退：char:<cid> -> cid；否则 raw；最后 'current'
+      try {
+        if (raw && typeof raw === 'string' && raw.startsWith('char:')) return raw.split(':')[1];
+      } catch (_) {
+        /* ignore */ void 0;
       }
-      case 'characterName': {
-        const name = st?.characters?.[st?.characterId]?.name;
-        if (name) return String(name);
-        break;
-      }
-      case 'customPath': {
-        const p = String(setns.customIdPath ?? '').trim();
-        const val = resolveCustomPath(st || {}, p);
-        if (val !== undefined && val !== null && String(val).length) return String(val);
-        break;
-      }
+      return String(raw || 'current');
     }
-  } catch (_) { /* ignore */ void 0; }
-  // 回退：char:<cid> -> cid；否则 raw；最后 'current'
-  try {
-    if (raw && typeof raw === 'string' && raw.startsWith('char:')) return raw.split(':')[1];
-  } catch (_) { /* ignore */ void 0; }
-  return String(raw || 'current');
-}
     const pushMyMsg = (text, targetId) => {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const idLine = (targetId !== undefined && targetId !== null)
-    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
-    : '';
-  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
-  messages.appendChild(wrap);
-  messages.scrollTop = messages.scrollHeight;
-};
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+      const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const idLine =
+        targetId !== undefined && targetId !== null
+          ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+          : '';
+      wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+      messages.appendChild(wrap);
+      messages.scrollTop = messages.scrollHeight;
+    };
 
     // 自动侦测 ST 输入区与发送按钮并尝试发送；失败则回退本地回显
     function trySendToSillyTavern(text, rawChatId) {
       try {
         const st = window.SillyTavern?.getContext?.();
         const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
-        const allowAuto = (autoSend === undefined) ? true : !!autoSend;
+        const allowAuto = autoSend === undefined ? true : !!autoSend;
         if (!allowAuto) return false;
 
         const targetId = deriveTargetId(rawChatId);
@@ -948,17 +1133,23 @@ function deriveTargetId(raw) {
 
         // 常见输入框/按钮选择器集合（优先级从高到低）
         const inputSelectors = [
-          '#send_textarea', 'textarea#send_textarea',
+          '#send_textarea',
+          'textarea#send_textarea',
           'textarea[name="send_textarea"]',
           '[data-testid="send-textarea"]',
-          'textarea#sendText', 'textarea[name="sendText"]',
-          '.send-textarea textarea', '.send-textarea'
+          'textarea#sendText',
+          'textarea[name="sendText"]',
+          '.send-textarea textarea',
+          '.send-textarea',
         ];
         const buttonSelectors = [
-          '#send_but', 'button#send_but',
+          '#send_but',
+          'button#send_but',
           '[data-testid="send-button"]',
           'button[aria-label="Send"]',
-          '.send_button', '.send-btn', 'button.send'
+          '.send_button',
+          '.send-btn',
+          'button.send',
         ];
 
         const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
@@ -1010,7 +1201,7 @@ function deriveTargetId(raw) {
 
       input.value = '';
     });
-    input.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         send.click();
       }
@@ -1030,10 +1221,9 @@ function deriveTargetId(raw) {
         this._renderChatListDynamic();
       } else if (this.currentView === 'detail' && this.currentChatId) {
         const ctx = window.wechatContext;
-    const st = window.SillyTavern?.getContext?.();
-    const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
-        const msgs =
-          ctx && ctx.ready && ctx.messagesByChatId ? ctx.messagesByChatId[this.currentChatId] || [] : [];
+        const st = window.SillyTavern?.getContext?.();
+        const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
+        const msgs = ctx && ctx.ready && ctx.messagesByChatId ? ctx.messagesByChatId[this.currentChatId] || [] : [];
         this._renderChatDetailDynamic({ id: this.currentChatId, name: this._currentChatName || '聊天' }, msgs);
       }
     } catch (_) {
@@ -1089,7 +1279,9 @@ function deriveTargetId(raw) {
   if (typeof window.initContextSync === 'function') {
     try {
       window.initContextSync();
-    } catch (e) { console.warn('[WeChat Simulator] initContextSync failed:', e); }
+    } catch (e) {
+      console.warn('[WeChat Simulator] initContextSync failed:', e);
+    }
   }
 })();
 
@@ -1213,7 +1405,9 @@ function deriveTargetId(raw) {
 
       content.innerHTML = `
         <div class="chat-list">
-          ${chats.map(c => `
+          ${chats
+            .map(
+              c => `
             <div class="chat-item" data-id="${c.id}" data-name="${c.name}"
                  style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
               <div class="avatar" style="width:44px;height:44px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:12px;">
@@ -1230,7 +1424,9 @@ function deriveTargetId(raw) {
                 </div>
               </div>
             </div>
-          `).join('')}
+          `,
+            )
+            .join('')}
         </div>
       `;
 
@@ -1242,7 +1438,12 @@ function deriveTargetId(raw) {
           let switchedToChar = false;
 
           // 若为“角色占位会话”，先尝试切换到对应角色并刷新上下文
-          if (rawId && rawId.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
+          if (
+            rawId &&
+            rawId.startsWith('char:') &&
+            window.WeChatSwitch &&
+            typeof window.WeChatSwitch.trySwitchToCharacter === 'function'
+          ) {
             const cid = rawId.split(':')[1];
             try {
               const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
@@ -1266,7 +1467,9 @@ function deriveTargetId(raw) {
             if (switchedToChar || (rawId && rawId.startsWith('char:'))) {
               effectiveId = currentId;
             }
-          } catch (_) { /* 忽略 */ }
+          } catch (_) {
+            /* 忽略 */
+          }
 
           // 优先直接从 ST API 拉取当前会话历史，失败再回退到 wechatContext 缓存
           async function fetchStMessages() {
@@ -1274,11 +1477,19 @@ function deriveTargetId(raw) {
               const arr = await st?.getCurrentChatMessages?.();
               if (!Array.isArray(arr) || arr.length === 0) return [];
               // 轻量标准化
-              return arr.map(m => {
-                const isUser = (m?.is_user === true) || (m?.isUser === true) || (m?.role === 'user') || (m?.name === 'You') || (m?.user === true) || (m?.author === 'user');
-                const text = String(m?.mes ?? m?.text ?? m?.content ?? m?.message ?? '').trim();
-                return { from: isUser ? 'me' : 'other', text };
-              }).filter(x => x.text !== '');
+              return arr
+                .map(m => {
+                  const isUser =
+                    m?.is_user === true ||
+                    m?.isUser === true ||
+                    m?.role === 'user' ||
+                    m?.name === 'You' ||
+                    m?.user === true ||
+                    m?.author === 'user';
+                  const text = String(m?.mes ?? m?.text ?? m?.content ?? m?.message ?? '').trim();
+                  return { from: isUser ? 'me' : 'other', text };
+                })
+                .filter(x => x.text !== '');
             } catch (e) {
               return [];
             }
@@ -1293,7 +1504,9 @@ function deriveTargetId(raw) {
               if (ctx2 && ctx2.ready && ctx2.messagesByChatId) {
                 msgs = ctx2.messagesByChatId[effectiveId] || ctx2.messagesByChatId[rawId] || [];
               }
-            } catch (_) { /* 忽略 */ }
+            } catch (_) {
+              /* 忽略 */
+            }
           }
 
           this.renderChatDetail({ id: effectiveId, name }, msgs);
@@ -1331,13 +1544,19 @@ function deriveTargetId(raw) {
       content.innerHTML = `
         <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
           <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
-            ${msgs.map(m => `
+            ${msgs
+              .map(
+                m => `
               <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                 <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
-                  ${String(m.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+                  ${String(m.text || '')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')}
                 </div>
               </div>
-            `).join('')}
+            `,
+              )
+              .join('')}
           </div>
           <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
             <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
@@ -1351,16 +1570,17 @@ function deriveTargetId(raw) {
       const messages = content.querySelector('.messages');
 
       const pushMyMsg = (text, targetId) => {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-  const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const idLine = (targetId !== undefined && targetId !== null)
-    ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
-    : '';
-  wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
-  messages.appendChild(wrap);
-  messages.scrollTop = messages.scrollHeight;
-};
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
+        const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const idLine =
+          targetId !== undefined && targetId !== null
+            ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
+            : '';
+        wrap.innerHTML = `<div style="max-width:70%;">${idLine}<div style="padding:8px 10px;border-radius:8px;background:#95ec69;box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">${safe}</div></div>`;
+        messages.appendChild(wrap);
+        messages.scrollTop = messages.scrollHeight;
+      };
 
       send.addEventListener('click', () => {
         const val = (input.value || '').trim();
@@ -1373,21 +1593,27 @@ function deriveTargetId(raw) {
         try {
           const st = window.SillyTavern?.getContext?.();
           const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
-          const allowAuto = (autoSend === undefined) ? true : !!autoSend;
+          const allowAuto = autoSend === undefined ? true : !!autoSend;
           if (allowAuto) {
             const outbound = `发送给id:${targetId}\n\n${val}`;
             const inputSelectors = [
-              '#send_textarea', 'textarea#send_textarea',
+              '#send_textarea',
+              'textarea#send_textarea',
               'textarea[name="send_textarea"]',
               '[data-testid="send-textarea"]',
-              'textarea#sendText', 'textarea[name="sendText"]',
-              '.send-textarea textarea', '.send-textarea'
+              'textarea#sendText',
+              'textarea[name="sendText"]',
+              '.send-textarea textarea',
+              '.send-textarea',
             ];
             const buttonSelectors = [
-              '#send_but', 'button#send_but',
+              '#send_but',
+              'button#send_but',
               '[data-testid="send-button"]',
               'button[aria-label="Send"]',
-              '.send_button', '.send-btn', 'button.send'
+              '.send_button',
+              '.send-btn',
+              'button.send',
             ];
             const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
             const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
@@ -1395,8 +1621,11 @@ function deriveTargetId(raw) {
               inputEl.focus();
               inputEl.value = outbound;
               inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-              if (buttonEl) { buttonEl.click(); }
-              else { inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); }
+              if (buttonEl) {
+                buttonEl.click();
+              } else {
+                inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+              }
             } else {
               const all = Array.from(document.querySelectorAll('textarea'));
               const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
@@ -1412,7 +1641,7 @@ function deriveTargetId(raw) {
           console.warn('[WeChat Simulator] override send bridge failed:', e);
         }
       });
-      input.addEventListener('keydown', (e) => {
+      input.addEventListener('keydown', e => {
         if (e.key === 'Enter') send.click();
       });
 
@@ -1462,7 +1691,10 @@ function deriveTargetId(raw) {
             } else if (window.wechatPhone.currentView === 'detail' && window.wechatPhone.currentChatId) {
               const ctx = window.wechatContext;
               const msgs = ctx?.messagesByChatId?.[window.wechatPhone.currentChatId] || [];
-              window.wechatPhone.renderChatDetail({ id: window.wechatPhone.currentChatId, name: window.wechatPhone._currentChatName || '聊天' }, msgs);
+              window.wechatPhone.renderChatDetail(
+                { id: window.wechatPhone.currentChatId, name: window.wechatPhone._currentChatName || '聊天' },
+                msgs,
+              );
             }
           }
         } catch (e) {
@@ -1474,14 +1706,20 @@ function deriveTargetId(raw) {
 
     // 若 context-sync 已可用，确保启动
     if (typeof window.initContextSync === 'function') {
-      try { window.initContextSync(); } catch (e) { console.warn('[WeChat Simulator] initContextSync failed:', e); }
+      try {
+        window.initContextSync();
+      } catch (e) {
+        console.warn('[WeChat Simulator] initContextSync failed:', e);
+      }
     }
 
     return true;
   }
 
   if (!override()) {
-    const t = setInterval(() => { if (override()) clearInterval(t); }, 100);
+    const t = setInterval(() => {
+      if (override()) clearInterval(t);
+    }, 100);
   }
 })();
 
@@ -1509,16 +1747,14 @@ function deriveTargetId(raw) {
               if (r && typeof r.then === 'function') await r;
               await new Promise(r2 => setTimeout(r2, 200));
               return true;
-            } catch (_) { /* 继续尝试其它 API */ }
+            } catch (_) {
+              /* 继续尝试其它 API */
+            }
           }
         }
 
         // 2) DOM 方式：尝试点击角色列表项
-        const selectors = [
-          `[data-chid="${cid}"]`,
-          `[data-character-id="${cid}"]`,
-          `.character[data-id="${cid}"]`,
-        ];
+        const selectors = [`[data-chid="${cid}"]`, `[data-character-id="${cid}"]`, `.character[data-id="${cid}"]`];
         for (const sel of selectors) {
           const node = document.querySelector(sel);
           if (node) {
@@ -1533,14 +1769,16 @@ function deriveTargetId(raw) {
           st.characterId = cid;
           await new Promise(r2 => setTimeout(r2, 200));
           return true;
-        } catch (e) { /* ignore */ }
+        } catch (e) {
+          /* ignore */
+        }
 
         return false;
       } catch (e) {
         console.warn('[WeChat Simulator] trySwitchToCharacter error:', e);
         return false;
       }
-    }
+    },
   };
 })();
 
@@ -1553,18 +1791,26 @@ function deriveTargetId(raw) {
     try {
       const raw = localStorage.getItem('wechatLocalStoreV1');
       if (raw) return JSON.parse(raw);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
     return { messagesByChatId: {}, lastByChatId: {} };
   }
   function saveWeChatLocalStore(store) {
-    try { localStorage.setItem('wechatLocalStoreV1', JSON.stringify(store)); } catch (e) { /* ignore */ }
+    try {
+      localStorage.setItem('wechatLocalStoreV1', JSON.stringify(store));
+    } catch (e) {
+      /* ignore */
+    }
   }
   function getCurrentChatIdSafe() {
     try {
       const st = window.SillyTavern?.getContext?.();
       const cur = st?.getCurrentChatId?.();
       if (cur !== undefined && cur !== null) return String(cur);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
     return 'current';
   }
   function normalizeChatKey(raw) {
@@ -1591,14 +1837,17 @@ function deriveTargetId(raw) {
     try {
       const date = new Date(ts);
       const now = new Date();
-      const sameDay = date.getFullYear() === now.getFullYear() &&
-                      date.getMonth() === now.getMonth() &&
-                      date.getDate() === now.getDate();
+      const sameDay =
+        date.getFullYear() === now.getFullYear() &&
+        date.getMonth() === now.getMonth() &&
+        date.getDate() === now.getDate();
       if (sameDay) return date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
       const diff = now - date;
       if (diff > 0 && diff < 86400000) return '昨天';
       return `${date.getMonth() + 1}/${date.getDate()}`;
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }
   function updateChatListFromLocal(rootEl) {
     try {
@@ -1622,7 +1871,9 @@ function deriveTargetId(raw) {
           if (sub) sub.textContent = last.text;
         }
       });
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   // Expose to other modules
@@ -1635,50 +1886,66 @@ function deriveTargetId(raw) {
 
   // Hook: when clicking send button in detail view, persist message
   let lastSentStamp = 0;
-  document.addEventListener('click', (ev) => {
-    try {
-      const t = ev.target;
-      if (!(t instanceof Element)) return;
-      if (t.id !== 'chat-send') return;
-      const input = document.getElementById('chat-input');
-      if (!input) return;
-      const text = String(input.value || '').trim();
-      if (!text) return;
-      // avoid double save within 300ms
-      const now = Date.now();
-      if (now - lastSentStamp < 300) return;
-      lastSentStamp = now;
+  document.addEventListener(
+    'click',
+    ev => {
+      try {
+        const t = ev.target;
+        if (!(t instanceof Element)) return;
+        if (t.id !== 'chat-send') return;
+        const input = document.getElementById('chat-input');
+        if (!input) return;
+        const text = String(input.value || '').trim();
+        if (!text) return;
+        // avoid double save within 300ms
+        const now = Date.now();
+        if (now - lastSentStamp < 300) return;
+        lastSentStamp = now;
 
-      const phone = window.wechatPhone;
-      const chatId = phone?.currentChatId || getCurrentChatIdSafe();
-      appendLocalMessage(chatId, 'me', text);
-      // after a slight delay, if list is visible, update
-      setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
-    } catch (e) { /* ignore */ }
-  }, true);
+        const phone = window.wechatPhone;
+        const chatId = phone?.currentChatId || getCurrentChatIdSafe();
+        appendLocalMessage(chatId, 'me', text);
+        // after a slight delay, if list is visible, update
+        setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
+      } catch (e) {
+        /* ignore */
+      }
+    },
+    true,
+  );
 
   // Hook: Enter key in input bar also triggers, but click handler above will run; keep as fallback
-  document.addEventListener('keydown', (ev) => {
-    try {
-      if (ev.key !== 'Enter') return;
-      const input = document.getElementById('chat-input');
-      if (!input || document.activeElement !== input) return;
-      const text = String(input.value || '').trim();
-      if (!text) return;
-      const now = Date.now();
-      if (now - lastSentStamp < 300) return;
-      lastSentStamp = now;
+  document.addEventListener(
+    'keydown',
+    ev => {
+      try {
+        if (ev.key !== 'Enter') return;
+        const input = document.getElementById('chat-input');
+        if (!input || document.activeElement !== input) return;
+        const text = String(input.value || '').trim();
+        if (!text) return;
+        const now = Date.now();
+        if (now - lastSentStamp < 300) return;
+        lastSentStamp = now;
 
-      const phone = window.wechatPhone;
-      const chatId = phone?.currentChatId || getCurrentChatIdSafe();
-      appendLocalMessage(chatId, 'me', text);
-      setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
-    } catch (e) { /* ignore */ }
-  }, true);
+        const phone = window.wechatPhone;
+        const chatId = phone?.currentChatId || getCurrentChatIdSafe();
+        appendLocalMessage(chatId, 'me', text);
+        setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
+      } catch (e) {
+        /* ignore */
+      }
+    },
+    true,
+  );
 
   // When chat list renders (or context updates), try to overlay local last summaries
   document.addEventListener('wechat-context-updated', () => {
-    try { updateChatListFromLocal(document.getElementById('wechat-content')); } catch (e) { /* ignore */ }
+    try {
+      updateChatListFromLocal(document.getElementById('wechat-content'));
+    } catch (e) {
+      /* ignore */
+    }
   });
 
   // Mutation observer to catch chat-list being re-rendered
@@ -1690,5 +1957,7 @@ function deriveTargetId(raw) {
       });
       obs.observe(content, { childList: true, subtree: true });
     }
-  } catch (e) { /* ignore */ }
+  } catch (e) {
+    /* ignore */
+  }
 })();
