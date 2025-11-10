@@ -983,3 +983,62 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const t = setInterval(() => { if (override()) clearInterval(t); }, 100);
   }
 })();
+
+/* === WeChat Extension: ST 会话切换助手（多会话按需切换） === */
+(function () {
+  // 避免重复定义
+  if (window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') return;
+
+  window.WeChatSwitch = {
+    /**
+     * 尝试切换到指定角色（cid 为 SillyTavern 内部角色 id/索引）
+     * 返回：true=已尝试切换（可能需要等待 ST 自身刷新），false=未能切换
+     */
+    async trySwitchToCharacter(cid) {
+      try {
+        const st = window.SillyTavern?.getContext?.();
+        if (!st) return false;
+
+        // 1) 优先尝试常见 API
+        const apiCandidates = [st.selectCharacter, st.setCharacterId, st.setCharacter, st.switchCharacter];
+        for (const fn of apiCandidates) {
+          if (typeof fn === 'function') {
+            try {
+              const r = fn.call(st, cid);
+              if (r && typeof r.then === 'function') await r;
+              await new Promise(r2 => setTimeout(r2, 200));
+              return true;
+            } catch (_) { /* 继续尝试其它 API */ }
+          }
+        }
+
+        // 2) DOM 方式：尝试点击角色列表项
+        const selectors = [
+          `[data-chid="${cid}"]`,
+          `[data-character-id="${cid}"]`,
+          `.character[data-id="${cid}"]`,
+        ];
+        for (const sel of selectors) {
+          const node = document.querySelector(sel);
+          if (node) {
+            node.click();
+            await new Promise(r2 => setTimeout(r2, 300));
+            return true;
+          }
+        }
+
+        // 3) 最后回退：尝试写入字段（不保证 ST 会响应）
+        try {
+          st.characterId = cid;
+          await new Promise(r2 => setTimeout(r2, 200));
+          return true;
+        } catch (e) { /* ignore */ }
+
+        return false;
+      } catch (e) {
+        console.warn('[WeChat Simulator] trySwitchToCharacter error:', e);
+        return false;
+      }
+    }
+  };
+})();
