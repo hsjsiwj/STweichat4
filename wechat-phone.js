@@ -108,6 +108,41 @@ class WeChatPhone {
             document.head.appendChild(styleFix);
         })();
 
+        // 启用拖拽（以标题栏为手柄），并自动校正越界位置，防止“半个界面超出视口且无法拖拽”
+        try {
+            if (window.DragHelper) {
+                new window.DragHelper(frame, {
+                    boundary: document.documentElement,
+                    dragHandle: '.wechat-header',
+                    savePosition: true,
+                    storageKey: 'wechat-frame-pos',
+                    clickThreshold: 3,
+                    touchTimeout: 150,
+                });
+            }
+        } catch (e) { /* ignore */ }
+
+        const resetIfOffscreen = () => {
+            try {
+                const rect = frame.getBoundingClientRect();
+                const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+                const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+                // 显著越界：四周预留 10px 安全边距
+                if (rect.right < 10 || rect.bottom < 10 || rect.left > vw - 10 || rect.top > vh - 10) {
+                    // 清除已保存的位置，恢复到“居中 + 适配缩放”
+                    try { localStorage.removeItem('wechat-frame-pos'); } catch (e) { /* ignore */ }
+                    frame.style.left = '50%';
+                    frame.style.top = '50%';
+                    frame.style.transformOrigin = 'center center';
+                    // 交由 fitToViewport 重新计算 scale 与 translate
+                    fitToViewport();
+                }
+            } catch (e) { /* ignore */ }
+        };
+        // 初次校正 + 监听窗口变化
+        setTimeout(resetIfOffscreen, 0);
+        window.addEventListener('resize', resetIfOffscreen);
+
         // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
         // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
         const BASE_W = 375;
