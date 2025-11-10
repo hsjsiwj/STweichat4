@@ -69,7 +69,7 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       // 2) 集成设置（安全容错）
       try {
         const context = window.SillyTavern?.getContext?.();
-        const defaultSettings = { enabled: true, monitorInterval: 3000, autoOpen: true };
+        const defaultSettings = { enabled: true, monitorInterval: 3000, autoOpen: true, autoSendToST: true };
         if (context) {
           if (!context.extensionSettings.wechat_simulator) {
             context.extensionSettings.wechat_simulator = { ...defaultSettings };
@@ -86,6 +86,49 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       } catch (e) {
         console.warn('[WeChat Simulator] 设置集成失败，不影响基本功能', e);
       }
+
+      // 2.5) 注入设置面板（如果存在 #extensions_settings）
+      function createWechatSettingsUI() {
+        try {
+          const ctx = window.SillyTavern?.getContext?.();
+          const root = document.getElementById('extensions_settings');
+          if (!ctx || !root) return;
+          if (document.getElementById('wechat_simulator_settings')) return;
+
+          const checked = !!(ctx.extensionSettings?.wechat_simulator?.autoSendToST ?? true);
+          const panel = document.createElement('div');
+          panel.id = 'wechat_simulator_settings';
+          panel.innerHTML = `
+            <div class="inline-drawer">
+              <div class="inline-drawer-toggle inline-drawer-header">
+                <b>微信模拟器</b>
+                <div class="inline-drawer-icon fa-solid fa-circle-chevron-down"></div>
+              </div>
+              <div class="inline-drawer-content">
+                <label class="checkbox_label" for="wechat_auto_send_to_st" style="display:flex;gap:8px;align-items:center;">
+                  <input id="wechat_auto_send_to_st" type="checkbox" ${checked ? 'checked' : ''}/>
+                  <span>自动将发送输入转发到 SillyTavern 输入框</span>
+                </label>
+              </div>
+            </div>
+          `;
+          root.appendChild(panel);
+
+          const cb = document.getElementById('wechat_auto_send_to_st');
+          cb?.addEventListener('change', () => {
+            const v = !!cb.checked;
+            try {
+              ctx.extensionSettings.wechat_simulator.autoSendToST = v;
+              ctx.saveSettingsDebounced?.();
+            } catch (err) {
+              console.warn('[WeChat Simulator] 保存 autoSendToST 失败:', err);
+            }
+          });
+        } catch (err) {
+          console.warn('[WeChat Simulator] 设置面板创建失败:', err);
+        }
+      }
+      createWechatSettingsUI();
 
       // 3) 加载基础样式（拖拽态兜底，带 MIME fallback）
       async function loadCss(url) {

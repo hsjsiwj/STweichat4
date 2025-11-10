@@ -101,6 +101,141 @@ class WeChatPhone {
                 this.loadTabContent(item.dataset.tab);
             });
         });
+
+        // 顶部搜索按钮（占位搜索面板）
+        const searchBtn = frame.querySelector('.wechat-header .search');
+        if (searchBtn) {
+            searchBtn.addEventListener('click', () => {
+                if (typeof this.showSearchPanel === 'function') {
+                    this.showSearchPanel();
+                } else {
+                    const kw = prompt('搜索联系人/聊天：');
+                    if (kw && kw.trim()) {
+                        this.setTitle(`搜索: ${kw.trim()}`);
+                    }
+                }
+            });
+        }
+
+        // 顶部“＋”按钮（弹出菜单：发起群聊/添加朋友/扫一扫）
+        const addBtn = frame.querySelector('.wechat-header .add');
+        if (addBtn) {
+            addBtn.addEventListener('click', (e) => {
+                if (typeof this.toggleAddMenu === 'function') {
+                    this.toggleAddMenu(e);
+                }
+            });
+        }
+    }
+
+    // 简易搜索面板（占位版）
+    showSearchPanel() {
+        const frame = document.getElementById('wechat-frame');
+        let panel = frame.querySelector('#wechat-search-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'wechat-search-panel';
+            panel.style.cssText = `
+                position: absolute;
+                top: 64px;
+                left: 10px;
+                right: 10px;
+                background: #fff;
+                border: 1px solid #e5e5e5;
+                border-radius: 8px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+                padding: 10px;
+                z-index: 10001;
+            `;
+            panel.innerHTML = `
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <input id="wechat-search-input" type="text" placeholder="搜索" style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
+                    <button id="wechat-search-cancel" style="height:36px;padding:0 12px;border:none;background:#f0f0f0;border-radius:6px;cursor:pointer;">取消</button>
+                </div>
+            `;
+            frame.appendChild(panel);
+
+            panel.querySelector('#wechat-search-cancel')?.addEventListener('click', () => {
+                panel.style.display = 'none';
+            });
+
+            const input = panel.querySelector('#wechat-search-input');
+            input?.addEventListener('keydown', (ev) => {
+                if (ev.key === 'Enter') {
+                    const val = (input.value || '').trim();
+                    this.setTitle(val ? `搜索: ${val}` : '微信');
+                    panel.style.display = 'none';
+                }
+            });
+        } else {
+            panel.style.display = 'block';
+        }
+        this.setTitle('搜索');
+    }
+
+    // 顶部“＋”菜单（占位版）
+    toggleAddMenu(evt) {
+        const frame = document.getElementById('wechat-frame');
+        let menu = frame.querySelector('#wechat-add-menu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'wechat-add-menu';
+            menu.style.cssText = `
+                position: absolute;
+                top: 54px;
+                right: 10px;
+                width: 180px;
+                background: #fff;
+                border: 1px solid #e5e5e5;
+                border-radius: 8px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+                overflow: hidden;
+                z-index: 10001;
+            `;
+            menu.innerHTML = `
+                <div class="item" data-act="group" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">发起群聊</div>
+                <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友</div>
+                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">扫一扫</div>
+            `;
+            frame.appendChild(menu);
+
+            menu.addEventListener('click', (e) => {
+                const t = e.target;
+                if (!(t instanceof Element)) return;
+                const act = t.getAttribute('data-act');
+                switch (act) {
+                    case 'group':
+                        alert('发起群聊（占位）');
+                        break;
+                    case 'add':
+                        alert('添加朋友（占位）');
+                        break;
+                    case 'scan':
+                        alert('扫一扫（占位）');
+                        break;
+                }
+                this.closeAddMenu();
+            });
+        }
+        menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+
+        // 点击外部关闭
+        const handleOutside = (ev) => {
+            if (!menu) return;
+            if (!menu.contains(ev.target)) {
+                this.closeAddMenu();
+                document.removeEventListener('mousedown', handleOutside, true);
+                document.removeEventListener('touchstart', handleOutside, true);
+            }
+        };
+        document.addEventListener('mousedown', handleOutside, true);
+        document.addEventListener('touchstart', handleOutside, true);
+    }
+
+    closeAddMenu() {
+        const frame = document.getElementById('wechat-frame');
+        const menu = frame?.querySelector('#wechat-add-menu');
+        if (menu) menu.style.display = 'none';
     }
 
     loadTabContent(tab) {
@@ -367,6 +502,9 @@ class WeChatPhone {
         const frame = document.getElementById('wechat-frame');
         this.isVisible = !this.isVisible;
         frame.style.display = this.isVisible ? 'flex' : 'none';
+        if (this.isVisible && typeof this.startClock === 'function') {
+            try { this.startClock(); } catch (e) { /* 忽略 */ }
+        }
     }
 }
 
@@ -834,15 +972,67 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
       // 点击进入详情
       content.querySelectorAll('.chat-item').forEach(el => {
-        el.addEventListener('click', () => {
-          const id = el.getAttribute('data-id');
+        el.addEventListener('click', async () => {
+          const rawId = el.getAttribute('data-id');
           const name = el.getAttribute('data-name') || '聊天';
+          let switchedToChar = false;
 
-          let msgs = [];
-          if (useCtx && ctx.messagesByChatId) {
-            msgs = ctx.messagesByChatId[id] || [];
+          // 若为“角色占位会话”，先尝试切换到对应角色并刷新上下文
+          if (rawId && rawId.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
+            const cid = rawId.split(':')[1];
+            try {
+              const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
+              switchedToChar = !!switched;
+              if (switched && typeof window.refreshWeChatContext === 'function') {
+                await window.refreshWeChatContext();
+              } else {
+                // 等待 ST 内部刷新
+                await new Promise(r => setTimeout(r, 400));
+              }
+            } catch (e) {
+              console.warn('[WeChat Simulator] 切换角色失败:', e);
+            }
           }
-          this.renderChatDetail({ id, name }, msgs);
+
+          // 计算有效的 chatId：如果是占位会话，则以 ST 当前会话ID 为准，避免 messagesByChatId 键不一致
+          const st = window.SillyTavern?.getContext?.();
+          let effectiveId = rawId;
+          try {
+            const currentId = String(st?.getCurrentChatId?.() || rawId);
+            if (switchedToChar || (rawId && rawId.startsWith('char:'))) {
+              effectiveId = currentId;
+            }
+          } catch (_) { /* 忽略 */ }
+
+          // 优先直接从 ST API 拉取当前会话历史，失败再回退到 wechatContext 缓存
+          async function fetchStMessages() {
+            try {
+              const arr = await st?.getCurrentChatMessages?.();
+              if (!Array.isArray(arr) || arr.length === 0) return [];
+              // 轻量标准化
+              return arr.map(m => {
+                const isUser = (m?.is_user === true) || (m?.isUser === true) || (m?.role === 'user') || (m?.name === 'You') || (m?.user === true) || (m?.author === 'user');
+                const text = String(m?.mes ?? m?.text ?? m?.content ?? m?.message ?? '').trim();
+                return { from: isUser ? 'me' : 'other', text };
+              }).filter(x => x.text !== '');
+            } catch (e) {
+              return [];
+            }
+          }
+
+          let msgs = await fetchStMessages();
+
+          if (!msgs.length) {
+            // 读取最新上下文的消息映射
+            try {
+              const ctx2 = window.wechatContext;
+              if (ctx2 && ctx2.ready && ctx2.messagesByChatId) {
+                msgs = ctx2.messagesByChatId[effectiveId] || ctx2.messagesByChatId[rawId] || [];
+              }
+            } catch (_) { /* 忽略 */ }
+          }
+
+          this.renderChatDetail({ id: effectiveId, name }, msgs);
         });
       });
 

@@ -20,14 +20,14 @@ class MessageApp {
     saveChatList() {
         localStorage.setItem('wechat_chatList', JSON.stringify(this.chatList));
     }
-    
+
     handleNewFriend(friendData) {
         // 当添加新好友时，为他们创建一个空的聊天记录
         if (!this.chatList.find(chat => chat.id === friendData.id)) {
             this.chatList.push({
                 id: friendData.id,
                 name: friendData.name,
-                avatar: 'images/default-avatar.png', // 默认头像
+                avatar: `${window.wechatExtensionPath}/images/me-icon.png`, // 默认头像
                 lastMessage: '我们已经是好友了，开始聊天吧！',
                 messages: [],
             });
@@ -41,7 +41,7 @@ class MessageApp {
 
         if (!chat) {
             console.warn(`[WeChat Message] 收到未知发件人 "${sender}" 的消息，已自动创建聊天。`);
-            chat = { id: sender, name: sender, avatar: 'images/default-avatar.png', messages: [] };
+            chat = { id: sender, name: sender, avatar: `${window.wechatExtensionPath}/images/me-icon.png`, messages: [] };
             this.chatList.push(chat);
         }
 
@@ -66,7 +66,7 @@ class MessageApp {
         this.chatList.forEach(chat => {
             const item = document.createElement('li');
             item.innerHTML = `
-                <img src="${chat.avatar || 'images/default-avatar.png'}" alt="头像">
+                <img src="${chat.avatar || (window.wechatExtensionPath + '/images/me-icon.png')}" alt="头像">
                 <div>
                     <span>${chat.name}</span>
                     <p>${chat.lastMessage || ''}</p>
@@ -104,7 +104,7 @@ class MessageApp {
     renderMessages() {
         const messagesDiv = document.getElementById('messages');
         if (!messagesDiv || !this.currentChatId) return;
-        
+
         const chat = this.chatList.find(c => c.id === this.currentChatId);
         if (!chat) return;
 
@@ -135,7 +135,7 @@ class MessageApp {
         // 发送到SillyTavern，并隐藏该消息
         const command = `[发送消息|${this.currentChatId}|${message}]`;
         SillyTavern.getContext().sendSystemMessage(command, true);
-        
+
         input.value = '';
     }
 }
