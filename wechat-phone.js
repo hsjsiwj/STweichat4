@@ -428,28 +428,33 @@ class WeChatPhone {
   // 占位版：聊天列表（可点击进入会话详情）
   renderChatList() {
     const content = document.getElementById('wechat-content');
+    // 首选：根据本地存储与上下文动态计算会话列表；若为空再回退到 demo
     const demoChats = [
       { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
       { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
       { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
     ];
+    const ctx = window.wechatContext;
+    const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
+    const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
+    const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
 
     content.innerHTML = `
             <div class="chat-list">
-                ${demoChats
+                ${chats
                   .map(
                     c => `
-                  <div class="chat-item" data-id="${c.id}" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
+                  <div class="chat-item" data-id="${c.id}" data-name="${c.name || '聊天'}" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
                     <div class="avatar" style="width:44px;height:44px;border-radius:8px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:20px;margin-right:12px;">
-                      ${c.avatar}
+                      ${c.avatar || '🟢'}
                     </div>
                     <div style="flex:1;min-width:0;">
                       <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div style="font-size:16px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;">${c.name}</div>
-                        <div style="font-size:12px;color:#999;">${c.time}</div>
+                        <div style="font-size:16px;color:#111;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%;">${c.name || '聊天'}</div>
+                        <div style="font-size:12px;color:#999;">${c.time || ''}</div>
                       </div>
                       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-                        <div style="font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%;">${c.last}</div>
+                        <div style="font-size:13px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80%;">${c.last || ''}</div>
                         ${c.unread ? `<span style="background:#f54d4d;color:#fff;border-radius:10px;padding:0 6px;font-size:12px;line-height:18px;min-width:18px;text-align:center;">${c.unread}</span>` : ''}
                       </div>
                     </div>
@@ -464,7 +469,7 @@ class WeChatPhone {
     content.querySelectorAll('.chat-item').forEach(el => {
       el.addEventListener('click', async () => {
         const id = el.getAttribute('data-id');
-        const chat = demoChats.find(c => c.id === id) || { id, name: el.getAttribute('data-name') || '聊天' };
+        const name = el.getAttribute('data-name') || '聊天';
 
         // 如果是角色占位：尝试切换到对应角色并刷新
         if (
@@ -480,7 +485,7 @@ class WeChatPhone {
           }
         }
 
-        this.renderChatDetail(chat);
+        this.renderChatDetail({ id, name });
       });
     });
 
@@ -917,8 +922,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const ctx = window.wechatContext;
     const st = window.SillyTavern?.getContext?.();
     const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
+    const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
     const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
-    const chats = useCtx ? ctx.chats : demoChats;
+    const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
 
     content.innerHTML = `
       <div class="chat-list">
@@ -1433,8 +1439,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       ];
 
       const ctx = window.wechatContext;
+      const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
       const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
-      const chats = useCtx ? ctx.chats : demoChats;
+      const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
 
       content.innerHTML = `
         <div class="chat-list">
@@ -1989,12 +1996,90 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
   }
 
+  // 计算列表展示用名称
+  function getNameForKey(id) {
+    try {
+      const st = window.SillyTavern?.getContext?.();
+      if (typeof id === 'string' && id.startsWith('char:')) {
+        const cid = id.split(':')[1];
+        const name =
+          (Array.isArray(st?.characters) ? st.characters[Number(cid)]?.name : st?.characters?.[cid]?.name) ||
+          `好友 ${cid}`;
+        return name;
+      }
+      if (id === 'current') {
+        const name =
+          (Array.isArray(st?.characters) ? st.characters[st?.characterId]?.name : st?.characters?.[st?.characterId]?.name) ||
+          '当前会话';
+        return name || '当前会话';
+      }
+    } catch (e) { /* ignore */ }
+    return '会话';
+  }
+
+  // 虚建几个好友（仅当本地没有任何摘要时），用于快速验证“加好友/多会话”显示
+  function seedVirtualFriends() {
+    try {
+      if (localStorage.getItem('wechatSeededV1')) return;
+      const store = getWeChatLocalStore();
+      const base = Date.now();
+      const seeds = [
+        { id: 'char:101', text: '今晚一起打游戏？', ts: base - 1000 * 60 * 5 },
+        { id: 'char:102', text: '明天开会别忘了～', ts: base - 1000 * 60 * 30 },
+        { id: 'char:103', text: '记得看我发你的资料', ts: base - 1000 * 60 * 60 },
+      ];
+      for (const s of seeds) {
+        if (!store.messagesByChatId[s.id]) store.messagesByChatId[s.id] = [];
+        store.messagesByChatId[s.id].push({ from: 'other', text: s.text, ts: s.ts });
+        store.lastByChatId[s.id] = { text: s.text, ts: s.ts };
+      }
+      saveWeChatLocalStore(store);
+      localStorage.setItem('wechatSeededV1', '1');
+    } catch (e) { /* ignore */ }
+  }
+
+  // 根据本地 lastByChatId 生成“会话列表”，并融合 wechatContext 基础信息；按时间倒序
+  function getComputedChatList() {
+    try {
+      const store = getWeChatLocalStore();
+      const lastMap = store?.lastByChatId || {};
+      // 若本地完全为空，则种子几位虚拟好友
+      if (!lastMap || Object.keys(lastMap).length === 0) {
+        seedVirtualFriends();
+      }
+      const updatedStore = getWeChatLocalStore();
+      const updatedLast = updatedStore?.lastByChatId || {};
+      const entries = Object.entries(updatedLast);
+      if (entries.length === 0) return [];
+
+      const list = entries.map(([id, v]) => {
+        const name = getNameForKey(id);
+        return {
+          id,
+          name,
+          last: String(v?.text || ''),
+          time: formatTimeShort(Number(v?.ts) || Date.now()),
+          unread: 0,
+          avatar: '🟢',
+          _ts: Number(v?.ts) || 0,
+        };
+      });
+
+      // 时间倒序
+      list.sort((a, b) => b._ts - a._ts);
+      return list;
+    } catch (e) {
+      return [];
+    }
+  }
+
   // Expose to other modules
   window.wechatLocalStore = {
     get: getWeChatLocalStore,
     save: saveWeChatLocalStore,
     append: appendLocalMessage,
     updateList: updateChatListFromLocal,
+    getComputedChatList,
   };
 
   // Hook: when clicking send button in detail view, persist message
