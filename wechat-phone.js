@@ -16,7 +16,9 @@ class WeChatPhone {
     loadCSS() {
         const cssLink = document.createElement('link');
         cssLink.rel = 'stylesheet';
-        cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css`;
+        // 加上时间戳强制刷新，避免浏览器缓存旧样式（底栏图标仍显示截图的问题）
+        const ts = Date.now();
+        cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css?v=${ts}`;
         document.head.appendChild(cssLink);
     }
 
@@ -64,6 +66,47 @@ class WeChatPhone {
                 </div>
             </div>
         `;
+
+        // 强制覆盖图标为 Emoji（避免旧样式或缓存造成的位图图标残留）
+        (function injectEmojiIconStyle() {
+            const styleFix = document.createElement('style');
+            styleFix.setAttribute('data-wechat-style-fix', 'emoji-icons');
+            styleFix.textContent = `
+            .wechat-nav-item .icon { background-image: none !important; }
+            .wechat-nav-item .icon::after {
+              display: block;
+              text-align: center;
+              line-height: 24px;
+              font-size: 18px;
+            }
+            .wechat-nav-item .icon.chat::after { content: '💬'; }
+            .wechat-nav-item .icon.contacts::after { content: '👥'; }
+            .wechat-nav-item .icon.discover::after { content: '🧭'; }
+            .wechat-nav-item .icon.me::after { content: '👤'; }
+
+            .wechat-header .search { background-image: none !important; }
+            .wechat-header .search::after {
+              content: '🔍';
+              display: block;
+              text-align: center;
+              line-height: 24px;
+              font-size: 16px;
+            }
+            .wechat-header .add { background-image: none !important; }
+            .wechat-header .add::after {
+              content: '＋';
+              display: block;
+              text-align: center;
+              line-height: 24px;
+              font-size: 18px;
+            }`;
+            // 若之前已注入，先移除再注入，确保最新生效
+            try {
+                const old = document.querySelector('style[data-wechat-style-fix="emoji-icons"]');
+                if (old) old.remove();
+            } catch (e) { /* ignore */ }
+            document.head.appendChild(styleFix);
+        })();
 
         // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
         // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
@@ -359,8 +402,96 @@ class WeChatPhone {
         send.addEventListener('click', () => {
             const val = (input.value || '').trim();
             if (!val) return;
-            pushMyMsg(val);
+
+            // 计算目标ID（遵循设置：characterId/chatId/characterName/customPath）
+            let targetId = '';
+            try {
+                const st = window.SillyTavern?.getContext?.() || {};
+                const setns = st.extensionSettings?.wechat_simulator || {};
+                const source = String(setns.idSource ?? 'characterId');
+                const currentChatId = st.getCurrentChatId?.() ?? st.chatId;
+
+                const resolveCustomPath = (ctx, path) => {
+                    try {
+                        if (!path) return '';
+                        const fn = new Function('ctx', 'currentChatId', `
+                          try { with(ctx) { return (${path}); } } catch(e){ return ''; }
+                        `);
+                        return fn(ctx, currentChatId);
+                    } catch (e) { return ''; }
+                };
+
+                switch (source) {
+                    case 'characterId':
+                        if (st.characterId !== undefined && st.characterId !== null) targetId = String(st.characterId);
+                        break;
+                    case 'chatId':
+                        if (currentChatId !== undefined && currentChatId !== null) targetId = String(currentChatId);
+                        break;
+                    case 'characterName':
+                        targetId = st.characters?.[st.characterId]?.name ?? '';
+                        break;
+                    case 'customPath': {
+                        const p = String(setns.customIdPath ?? '').trim();
+                        targetId = resolveCustomPath(st, p) || '';
+                        break;
+                    }
+                }
+            } catch (e) { /* ignore */ }
+
+            // 兜底：char:<cid> 或 raw id 或 'current'
+            if (!targetId) {
+                try {
+                    if (chat?.id && String(chat.id).startsWith('char:')) {
+                        targetId = String(chat.id).split(':')[1];
+                    } else {
+                        targetId = String(chat?.id ?? 'current');
+                    }
+                } catch (e) { targetId = 'current'; }
+            }
+
+            // 本地回显带 id 行
+            pushMyMsg(val, targetId);
             input.value = '';
+
+            // 注入到 ST（前缀：发送给id:{id}\\n\\n正文）
+            try {
+                const outbound = `发送给id:${targetId}\n\n${val}`;
+                const inputSelectors = [
+                    '#send_textarea', 'textarea#send_textarea',
+                    'textarea[name="send_textarea"]',
+                    '[data-testid="send-textarea"]',
+                    'textarea#sendText', 'textarea[name="sendText"]',
+                    '.send-textarea textarea', '.send-textarea'
+                ];
+                const buttonSelectors = [
+                    '#send_but', 'button#send_but',
+                    '[data-testid="send-button"]',
+                    'button[aria-label="Send"]',
+                    '.send_button', '.send-btn', 'button.send'
+                ];
+                const inputEl = inputSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+                const buttonEl = buttonSelectors.map(sel => document.querySelector(sel)).find(Boolean);
+                if (inputEl) {
+                    inputEl.focus();
+                    inputEl.value = outbound;
+                    inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    if (buttonEl) {
+                        buttonEl.click();
+                    } else {
+                        inputEl.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    }
+                } else {
+                    const all = Array.from(document.querySelectorAll('textarea'));
+                    const guess = all.find(t => t.offsetParent !== null && t.clientHeight >= 24);
+                    if (guess) {
+                        guess.focus();
+                        guess.value = outbound;
+                        guess.dispatchEvent(new Event('input', { bubbles: true }));
+                        guess.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                    }
+                }
+            } catch (e) { /* ignore */ }
         });
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {

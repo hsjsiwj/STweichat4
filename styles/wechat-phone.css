@@ -99,11 +99,22 @@
     cursor: pointer;
 }
 
-.wechat-header .search {
-    background-image: url('../images/search-icon.png');
+/* force header actions to emoji instead of image */
+.wechat-header .search { background-image: none !important; }
+.wechat-header .search::after {
+    content: '🔍';
+    display: block;
+    text-align: center;
+    line-height: 24px;
+    font-size: 16px;
 }
-.wechat-header .add {
-    background-image: url('../images/add-icon.png');
+.wechat-header .add { background-image: none !important; }
+.wechat-header .add::after {
+    content: '＋';
+    display: block;
+    text-align: center;
+    line-height: 24px;
+    font-size: 18px;
 }
 
 
@@ -144,13 +155,14 @@
     background-repeat: no-repeat;
     background-position: center;
 }
-.wechat-nav-item .icon.chat { background-image: url('../images/chat-icon.png'); }
+/* image background removed to force emoji icons */
+.wechat-nav-item .icon.chat { background-image: none !important; }
 
-.wechat-nav-item .icon.contacts { background-image: url('../images/contacts-icon.png'); }
+.wechat-nav-item .icon.contacts { background-image: none !important; }
 
-.wechat-nav-item .icon.discover { background-image: url('../images/discover-icon.png'); }
+.wechat-nav-item .icon.discover { background-image: none !important; }
 
-.wechat-nav-item .icon.me { background-image: url('../images/me-icon.png'); }
+.wechat-nav-item .icon.me { background-image: none !important; }
 
 /* Override: revert bottom tab icons to emoji (remove image backgrounds) */
 .wechat-nav-item .icon { background-image: none !important; }
