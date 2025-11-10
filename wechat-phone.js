@@ -65,8 +65,30 @@ class WeChatPhone {
             </div>
         `;
 
-        // 按你的要求：手机主界面不再可拖拽，始终完整显示在视口（使用 CSS 居中）
-        // 悬浮“💬”图标仍可拖拽（由 index.js 中 DragHelper(trigger) 负责）
+        // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
+        // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
+        const BASE_W = 375;
+        const BASE_H = 812;
+
+        const fitToViewport = () => {
+            const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+            const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+            const safeW = Math.max(0, vw - 20); // 四边留白 10px
+            const safeH = Math.max(0, vh - 20);
+            const scale = Math.min(1, safeW / BASE_W, safeH / BASE_H);
+
+            frame.style.width = BASE_W + 'px';
+            frame.style.height = BASE_H + 'px';
+            frame.style.top = '50%';
+            frame.style.left = '50%';
+            frame.style.transformOrigin = 'center center';
+            frame.style.transform = `translate(-50%, -50%) scale(${scale})`;
+        };
+
+        fitToViewport();
+        window.addEventListener('resize', fitToViewport);
+        // 暴露给外部调试
+        this._fitToViewport = fitToViewport;
     }
 
     bindNavEvents() {
@@ -134,11 +156,21 @@ class WeChatPhone {
             </div>
         `;
 
-        // 绑定点击进入聊天详情
+        // 绑定点击进入聊天详情（角色占位会话尝试切换到对应角色）
         content.querySelectorAll('.chat-item').forEach(el => {
-            el.addEventListener('click', () => {
+            el.addEventListener('click', async () => {
                 const id = el.getAttribute('data-id');
-                const chat = demoChats.find(c => c.id === id);
+                const chat = demoChats.find(c => c.id === id) || { id, name: el.getAttribute('data-name') || '聊天' };
+
+                // 如果是角色占位：尝试切换到对应角色并刷新
+                if (id && id.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
+                    const cid = id.split(':')[1];
+                    const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
+                    if (switched && window.refreshWeChatContext) {
+                        await window.refreshWeChatContext();
+                    }
+                }
+
                 this.renderChatDetail(chat);
             });
         });
@@ -408,18 +440,26 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       </div>
     `;
 
-    // 绑定点击进入聊天详情
+    // 绑定点击进入聊天详情（角色占位会话尝试切换到对应角色）
     content.querySelectorAll('.chat-item').forEach((el) => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', async () => {
         const id = el.getAttribute('data-id');
         const name = el.getAttribute('data-name') || '聊天';
-        let msgs = [];
 
+        // 如果是角色占位：尝试切换到对应角色并刷新
+        if (id && id.startsWith('char:') && window.WeChatSwitch && typeof window.WeChatSwitch.trySwitchToCharacter === 'function') {
+          const cid = id.split(':')[1];
+          const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
+          if (switched && window.refreshWeChatContext) {
+            await window.refreshWeChatContext();
+          }
+        }
+
+        let msgs = [];
         if (useCtx && ctx.messagesByChatId) {
           msgs = ctx.messagesByChatId[id] || [];
         }
 
-        // 若 ctx 中无此会话消息，则退回演示消息；名称用真实名称
         this._renderChatDetailDynamic({ id, name }, msgs);
       });
     });
