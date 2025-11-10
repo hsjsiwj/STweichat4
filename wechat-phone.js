@@ -352,6 +352,9 @@ class WeChatPhone {
                 this.renderChatDetail(chat);
             });
         });
+
+        // 根据本地存储刷新列表摘要与时间
+        try { window.wechatLocalStore?.updateList?.(content); } catch (e) { /* ignore */ }
     }
 
     // 占位版：聊天详情（简单消息 + 输入框）
@@ -365,10 +368,29 @@ class WeChatPhone {
             { from: 'other', text: chat?.last || '一起学习？' },
         ];
 
+        // 合并本地存储消息（demo + 本地）
+        let msgsToRender = (function() {
+          try {
+            const store = window.wechatLocalStore?.get?.();
+            const st = window.SillyTavern?.getContext?.();
+            const effectiveId = (function(){
+              try {
+                if (chat?.id && String(chat.id).startsWith('char:')) {
+                  const cur = st?.getCurrentChatId?.();
+                  return String(cur || chat.id);
+                }
+              } catch(e){}
+              return String(chat?.id || 'current');
+            })();
+            const localArr = store?.messagesByChatId?.[effectiveId] || [];
+            return demoMsgs.concat(localArr);
+          } catch(e) { return demoMsgs; }
+        })();
+
         content.innerHTML = `
             <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
                 <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
-                    ${demoMsgs.map(m => `
+                    ${msgsToRender.map(m => `
                         <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                             ${m.text}
@@ -737,6 +759,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       });
     });
 
+    // 根据本地存储刷新列表摘要与时间
+    try { window.wechatLocalStore?.updateList?.(content); } catch (e) { /* ignore */ }
+
     this.currentView = 'list';
     this.currentChatId = null;
     this._currentChatName = '';
@@ -767,6 +792,25 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
 
     this.setTitle(chatName);
+
+    // 合并本地消息（动态渲染版本）
+    try {
+      const store = window.wechatLocalStore?.get?.();
+      const st = window.SillyTavern?.getContext?.();
+      const effectiveId = (function(){
+        try {
+          if (chatId && String(chatId).startsWith('char:')) {
+            const cur = st?.getCurrentChatId?.();
+            return String(cur || chatId);
+          }
+        } catch(e){}
+        return String(chatId || 'current');
+      })();
+      const localArr = store?.messagesByChatId?.[effectiveId] || [];
+      if (Array.isArray(localArr) && localArr.length) {
+        msgs = msgs.concat(localArr);
+      }
+    } catch(e){}
 
     content.innerHTML = `
       <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
@@ -1463,4 +1507,153 @@ function deriveTargetId(raw) {
       }
     }
   };
+})();
+
+/* === WeChat Extension: Local Store patch (persist messages per chat and update list) === */
+(function wechatLocalStorePatch() {
+  'use strict';
+
+  // Helpers: local store structure
+  function getWeChatLocalStore() {
+    try {
+      const raw = localStorage.getItem('wechatLocalStoreV1');
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    return { messagesByChatId: {}, lastByChatId: {} };
+  }
+  function saveWeChatLocalStore(store) {
+    try { localStorage.setItem('wechatLocalStoreV1', JSON.stringify(store)); } catch (e) { /* ignore */ }
+  }
+  function getCurrentChatIdSafe() {
+    try {
+      const st = window.SillyTavern?.getContext?.();
+      const cur = st?.getCurrentChatId?.();
+      if (cur !== undefined && cur !== null) return String(cur);
+    } catch (e) { /* ignore */ }
+    return 'current';
+  }
+  function normalizeChatKey(raw) {
+    try {
+      if (raw && typeof raw === 'string' && raw.startsWith('char:')) {
+        // map role placeholder to real current chat id
+        const cur = getCurrentChatIdSafe();
+        return String(cur || raw);
+      }
+      return String(raw || getCurrentChatIdSafe());
+    } catch (e) {
+      return String(raw || 'current');
+    }
+  }
+  function appendLocalMessage(chatId, from, text, ts = Date.now()) {
+    const key = normalizeChatKey(chatId);
+    const store = getWeChatLocalStore();
+    if (!store.messagesByChatId[key]) store.messagesByChatId[key] = [];
+    store.messagesByChatId[key].push({ from, text, ts });
+    store.lastByChatId[key] = { text, ts };
+    saveWeChatLocalStore(store);
+  }
+  function formatTimeShort(ts) {
+    try {
+      const date = new Date(ts);
+      const now = new Date();
+      const sameDay = date.getFullYear() === now.getFullYear() &&
+                      date.getMonth() === now.getMonth() &&
+                      date.getDate() === now.getDate();
+      if (sameDay) return date.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      const diff = now - date;
+      if (diff > 0 && diff < 86400000) return '昨天';
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    } catch { return ''; }
+  }
+  function updateChatListFromLocal(rootEl) {
+    try {
+      if (!rootEl) rootEl = document.getElementById('wechat-content');
+      const list = rootEl?.querySelector('.chat-list');
+      if (!list) return;
+      const items = list.querySelectorAll('.chat-item');
+      const store = getWeChatLocalStore();
+      items.forEach(el => {
+        const id = el.getAttribute('data-id') || el.getAttribute('data-chat-id') || '';
+        const key = normalizeChatKey(id);
+        const last = store.lastByChatId[key];
+        if (last) {
+          // time field (the small right-aligned text on first row)
+          // try to find second div in first row (font-size:12px) by structure hints
+          const rows = el.querySelectorAll('div[style*="justify-content:space-between"]');
+          const headTime = rows[0]?.querySelector('div[style*="font-size:12px"]');
+          if (headTime) headTime.textContent = formatTimeShort(last.ts);
+          // last summary (font-size:13px section)
+          const sub = el.querySelector('div[style*="font-size:13px"]');
+          if (sub) sub.textContent = last.text;
+        }
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  // Expose to other modules
+  window.wechatLocalStore = {
+    get: getWeChatLocalStore,
+    save: saveWeChatLocalStore,
+    append: appendLocalMessage,
+    updateList: updateChatListFromLocal,
+  };
+
+  // Hook: when clicking send button in detail view, persist message
+  let lastSentStamp = 0;
+  document.addEventListener('click', (ev) => {
+    try {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      if (t.id !== 'chat-send') return;
+      const input = document.getElementById('chat-input');
+      if (!input) return;
+      const text = String(input.value || '').trim();
+      if (!text) return;
+      // avoid double save within 300ms
+      const now = Date.now();
+      if (now - lastSentStamp < 300) return;
+      lastSentStamp = now;
+
+      const phone = window.wechatPhone;
+      const chatId = phone?.currentChatId || getCurrentChatIdSafe();
+      appendLocalMessage(chatId, 'me', text);
+      // after a slight delay, if list is visible, update
+      setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
+    } catch (e) { /* ignore */ }
+  }, true);
+
+  // Hook: Enter key in input bar also triggers, but click handler above will run; keep as fallback
+  document.addEventListener('keydown', (ev) => {
+    try {
+      if (ev.key !== 'Enter') return;
+      const input = document.getElementById('chat-input');
+      if (!input || document.activeElement !== input) return;
+      const text = String(input.value || '').trim();
+      if (!text) return;
+      const now = Date.now();
+      if (now - lastSentStamp < 300) return;
+      lastSentStamp = now;
+
+      const phone = window.wechatPhone;
+      const chatId = phone?.currentChatId || getCurrentChatIdSafe();
+      appendLocalMessage(chatId, 'me', text);
+      setTimeout(() => updateChatListFromLocal(document.getElementById('wechat-content')), 0);
+    } catch (e) { /* ignore */ }
+  }, true);
+
+  // When chat list renders (or context updates), try to overlay local last summaries
+  document.addEventListener('wechat-context-updated', () => {
+    try { updateChatListFromLocal(document.getElementById('wechat-content')); } catch (e) { /* ignore */ }
+  });
+
+  // Mutation observer to catch chat-list being re-rendered
+  try {
+    const content = document.getElementById('wechat-content');
+    if (content && window.MutationObserver) {
+      const obs = new MutationObserver(() => {
+        updateChatListFromLocal(content);
+      });
+      obs.observe(content, { childList: true, subtree: true });
+    }
+  } catch (e) { /* ignore */ }
 })();
