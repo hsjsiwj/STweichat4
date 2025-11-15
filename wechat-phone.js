@@ -44,7 +44,6 @@ class WeChatPhone {
                 <div class="actions">
                     <span class="search"></span>
                     <span class="add"></span>
-                    <span class="import" title="导入历史标签"></span>
                 </div>
             </div>
             <div class="wechat-content" id="wechat-content"></div>
@@ -68,56 +67,7 @@ class WeChatPhone {
             </div>
         `;
 
-    // 强制覆盖图标为 Emoji（避免旧样式或缓存造成的位图图标残留）
-    (function injectEmojiIconStyle() {
-      const styleFix = document.createElement('style');
-      styleFix.setAttribute('data-wechat-style-fix', 'emoji-icons');
-      styleFix.textContent = `
-            .wechat-nav-item .icon { background-image: none !important; }
-            .wechat-nav-item .icon::after {
-              display: block;
-              text-align: center;
-              line-height: 24px;
-              font-size: 18px;
-            }
-            .wechat-nav-item .icon.chat::after { content: '💬'; }
-            .wechat-nav-item .icon.contacts::after { content: '👥'; }
-            .wechat-nav-item .icon.discover::after { content: '🧭'; }
-            .wechat-nav-item .icon.me::after { content: '👤'; }
-
-            .wechat-header .search { background-image: none !important; }
-            .wechat-header .search::after {
-              content: '🔍';
-              display: block;
-              text-align: center;
-              line-height: 24px;
-              font-size: 16px;
-            }
-            .wechat-header .add { background-image: none !important; }
-            .wechat-header .add::after {
-              content: '＋';
-              display: block;
-              text-align: center;
-              line-height: 24px;
-              font-size: 18px;
-            }
-            .wechat-header .import { background-image: none !important; }
-            .wechat-header .import::after {
-              content: '📥';
-              display: block;
-              text-align: center;
-              line-height: 24px;
-              font-size: 16px;
-            }`;
-      // 若之前已注入，先移除再注入，确保最新生效
-      try {
-        const old = document.querySelector('style[data-wechat-style-fix="emoji-icons"]');
-        if (old) old.remove();
-      } catch (e) {
-        /* ignore */
-      }
-      document.head.appendChild(styleFix);
-    })();
+    // 移除强制 Emoji 覆盖，改为使用 CSS 中的位图图标（见 styles/wechat-phone.css）
 
     // 清理历史 frame 位置存档，防止上次拖拽残留导致越界（仅悬浮图标可拖拽，手机本体不拖拽）
     try {
@@ -211,30 +161,8 @@ class WeChatPhone {
     // 暴露给外部调试
     this._fitToViewport = fitToViewport;
 
-    // 依据缩放状态启用/关闭拖拽，避免缩放(<1)时拖拽导致越界
-    this._setupOrUpdateDragHelper = () => {
-      try {
-        if (!window.DragHelper) return;
-        if (this._currentScale && this._currentScale < 0.999) {
-          if (this._drag && typeof this._drag.destroy === 'function') {
-            this._drag.destroy();
-          }
-          this._drag = null;
-          return;
-        }
-        if (!this._drag) {
-          this._drag = new window.DragHelper(frame, {
-            boundary: document.documentElement,
-            dragHandle: '.wechat-header',
-            savePosition: false,
-            clickThreshold: 3,
-            touchTimeout: 150,
-          });
-        }
-      } catch (e) {
-        /* ignore */
-      }
-    };
+    // 手机主界面不允许拖动（仅悬浮入口图标可拖动，见 index.js 对 #wechat-trigger 的 DragHelper）
+    this._setupOrUpdateDragHelper = null;
 
     // 提供公开方法：快速回中 + 重新适配
     this.recenter = () => {
@@ -252,15 +180,9 @@ class WeChatPhone {
       }
     };
 
-    // 初始化拖拽状态，并在窗口变化时更新且防越界
-    if (this._setupOrUpdateDragHelper) {
-      this._setupOrUpdateDragHelper();
-    }
+    // 窗口变化时仅重新适配与防越界（主界面不跟随拖动）
     window.addEventListener('resize', () => {
       fitToViewport();
-      if (this._setupOrUpdateDragHelper) {
-        this._setupOrUpdateDragHelper();
-      }
       resetIfOffscreen();
     });
   }
@@ -301,21 +223,7 @@ class WeChatPhone {
       });
     }
 
-    // 顶部“📥”导入按钮（扫描历史 [好友id|昵称|ID]）
-    const importBtn = frame.querySelector('.wechat-header .import');
-    if (importBtn) {
-      importBtn.addEventListener('click', async () => {
-        try {
-          if (window.wechatImporter && typeof window.wechatImporter.forceImport === 'function') {
-            await window.wechatImporter.forceImport(true);
-          } else {
-            alert('导入器未就绪，请稍后重试');
-          }
-        } catch (_) {
-          alert('导入失败，请查看控制台日志');
-        }
-      });
-    }
+    // 保留空位：顶部仅“搜索/＋”，不再提供导入按钮
   }
 
   // 简易搜索面板（占位版）
@@ -384,8 +292,7 @@ class WeChatPhone {
             `;
       menu.innerHTML = `
                 <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友（输入ID）</div>
-                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">粘贴标签文本添加</div>
-                <div class="item" data-act="import" style="padding:10px 12px;cursor:pointer;">导入历史标签（扫描当前会话）</div>
+                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">粘贴标签文本添加</div>
             `;
       frame.appendChild(menu);
 
@@ -434,21 +341,7 @@ class WeChatPhone {
             }
             break;
           }
-          case 'import': {
-            (async () => {
-              try {
-                if (window.wechatImporter && typeof window.wechatImporter.forceImport === 'function') {
-                  await window.wechatImporter.forceImport(true);
-                  refreshUI();
-                } else {
-                  alert('导入器未就绪，请稍后重试');
-                }
-              } catch (e4) {
-                alert('导入失败，请查看控制台。');
-              }
-            })();
-            break;
-          }
+          // 已移除导入历史入口，仅保留添加与粘贴标签两种方式
         }
         this.closeAddMenu();
       });
@@ -507,10 +400,9 @@ class WeChatPhone {
       // 空态：突出“添加好友”的入口，同时提供“导入历史标签”
       content.innerHTML = `
         <div class="chat-empty" style="background:#fff;padding:20px;">
-          <div style="color:#999;margin-bottom:12px;">暂无会话。请添加好友或导入含有 [好友id|昵称|ID] 的历史消息标签。</div>
+          <div style="color:#999;margin-bottom:12px;">暂无会话。请点击“＋ → 添加朋友（输入ID）”，或在聊天中发送包含 [好友id|昵称|ID] 的消息来建立好友。</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button id="wechat_add_friend_btn" class="menu_button" style="background:#07C160;color:#fff;">➕ 添加好友（输入ID）</button>
-            <button id="wechat_import_history_btn" class="menu_button" style="background:#777;color:#fff;">📥 导入历史标签</button>
           </div>
         </div>`;
       const addBtn = document.getElementById('wechat_add_friend_btn');
@@ -525,10 +417,6 @@ class WeChatPhone {
           if (!ok) alert('添加失败，请确认当前已选中一个角色。');
           else this.renderChatList();
         } catch (e) { alert('添加失败，请查看控制台。'); }
-      });
-      const impBtn = document.getElementById('wechat_import_history_btn');
-      impBtn?.addEventListener('click', async () => {
-        try { await window.wechatImporter?.forceImport?.(); this.renderChatList(); } catch (e) { alert('导入失败。'); }
       });
       return;
     }
@@ -1081,7 +969,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         }
 
         let msgs = [];
-        if (useCtx && ctx.messagesByChatId) {
+        const ctx = window.wechatContext;
+        if (ctx && ctx.messagesByChatId) {
           msgs = ctx.messagesByChatId[id] || [];
         }
 
@@ -1387,8 +1276,6 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     switch (tab) {
       case 'chat':
         this.setTitle('微信');
-        // 尝试在进入聊天页时导入历史标签（仅当前角色环境）
-        try { window.wechatImporter?.importIfNeeded?.(); } catch (e) { /* ignore */ }
         this._renderChatListDynamic();
         break;
       case 'contacts':
@@ -2372,3 +2259,30 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     /* ignore */
   }
 })();
+
+/* === WeChat Extension: capture latest tags on context updates === */
+document.addEventListener('wechat-context-updated', (ev) => {
+  try {
+    let text = '';
+    const msgs = ev && ev.detail && Array.isArray(ev.detail.messages) ? ev.detail.messages : null;
+    // Only capture the latest floor (last message)
+    if (msgs && msgs.length) {
+      const last = msgs[msgs.length - 1];
+      text = String(last?.mes ?? last?.text ?? last?.content ?? last?.message ?? '').trim();
+    }
+    // Fallback: query DOM mesid="1" last .message
+    if (!text) {
+      try {
+        const el = document.querySelector('[mesid="1"] .message:last-of-type') || document.querySelector('[mesid="1"] .message:last-child');
+        if (el) text = String(el.textContent || '').trim();
+      } catch (e) { /* ignore */ }
+    }
+    if (text && window.wechatLocalStore && typeof window.wechatLocalStore.captureFromText === 'function') {
+      try { window.wechatLocalStore.captureFromText(text); } catch (e) { /* ignore */ }
+    }
+    try {
+      const root = document.getElementById('wechat-content');
+      window.wechatLocalStore?.updateList?.(root);
+    } catch (e) { /* ignore */ }
+  } catch (e) { /* ignore */ }
+}, false);
