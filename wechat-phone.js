@@ -591,6 +591,9 @@ class WeChatPhone {
       const val = (input.value || '').trim();
       if (!val) return;
 
+      // 发送前尝试从文本中捕获并建友/更新
+      try { window.wechatLocalStore?.captureFromText?.(val); } catch (e) { /* ignore */ }
+
       // 计算目标ID（遵循设置：characterId/chatId/characterName/customPath）
       let targetId = '';
       try {
@@ -1019,6 +1022,11 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
     this.setTitle(chatName);
 
+    // 捕获文本中的好友标签以自动建友/更新（当前角色环境）
+    try {
+      msgs.forEach(m => window.wechatLocalStore?.captureFromText?.(String(m?.text || '')));
+    } catch (e) { /* ignore */ }
+
     // 合并本地消息（动态渲染版本：叠加本地到上下文消息上）
     try {
       const store = window.wechatLocalStore?.get?.();
@@ -1088,6 +1096,11 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
     // 根据设置推导“目标ID”（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
     function deriveTargetId(raw) {
+      // 复合键 '<charKey>::<friendId>' 场景：优先提取 friendId 用于发送前缀
+      if (typeof raw === 'string' && raw.includes('::')) {
+        const parts = raw.split('::');
+        return parts[parts.length - 1];
+      }
       try {
         const st = window.SillyTavern?.getContext?.();
         const setns = st?.extensionSettings?.wechat_simulator || {};
@@ -1230,6 +1243,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     send.addEventListener('click', () => {
       const val = (input.value || '').trim();
       if (!val) return;
+
+      // 发送前尝试从文本中捕获并建友/更新
+      try { window.wechatLocalStore?.captureFromText?.(val); } catch (e) { /* ignore */ }
 
       const targetId = deriveTargetId(chatId);
       // 本地立即回显（带目标 id）
@@ -1877,7 +1893,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     } catch (e) {
       /* ignore */
     }
-    return { messagesByChatId: {}, lastByChatId: {} };
+    return { messagesByChatId: {}, lastByChatId: {}, friendsByChar: {} };
   }
   function saveWeChatLocalStore(store) {
     try {
@@ -1936,21 +1952,17 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
   function appendLocalMessage(chatId, from, text, ts = Date.now()) {
     const store = getWeChatLocalStore();
-    const keys = [];
-
-    // 主键：真实会话ID（或映射后的 current）
-    const mainKey = normalizeChatKey(chatId);
-    keys.push(mainKey);
-
-    // 角色稳定键：char:<cid>（若可获取），用于“按角色分类”的稳定预览
     const cKey = getCharKey();
-    if (cKey) keys.push(cKey);
+    let key = String(chatId || '');
 
-    for (const k of keys) {
-      if (!store.messagesByChatId[k]) store.messagesByChatId[k] = [];
-      store.messagesByChatId[k].push({ from, text, ts });
-      store.lastByChatId[k] = { text, ts };
+    // 升级为复合键：<charKey>::<friendId>
+    if (!key.includes('::') && cKey) {
+      key = `${cKey}::${key || 'current'}`;
     }
+
+    if (!store.messagesByChatId[key]) store.messagesByChatId[key] = [];
+    store.messagesByChatId[key].push({ from, text, ts });
+    store.lastByChatId[key] = { text, ts };
     saveWeChatLocalStore(store);
   }
   function formatTimeShort(ts) {
@@ -1978,7 +1990,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const store = getWeChatLocalStore();
       items.forEach(el => {
         const id = el.getAttribute('data-id') || el.getAttribute('data-chat-id') || '';
-        const key = resolveOverlayKey(id);
+        const key = (store.lastByChatId[id] ? id : resolveOverlayKey(id));
         const last = store.lastByChatId[key];
         if (last) {
           // time field (the small right-aligned text on first row)
@@ -1996,10 +2008,59 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
   }
 
+  // 解析 '<charKey>::<friendId>' 获取友ID
+  function extractFriendIdFromComposite(key) {
+    if (!key || typeof key !== 'string') return '';
+    const parts = key.split('::');
+    return parts.length >= 2 ? parts[1] : key;
+  }
+
+  // 自动从文本中捕获好友标签 [好友id|角色名|好友id]
+  function captureFriendsFromText(text) {
+    try {
+      if (!text || typeof text !== 'string') return [];
+      const cKey = getCharKey();
+      if (!cKey) return [];
+      const store = getWeChatLocalStore();
+      if (!store.friendsByChar) store.friendsByChar = {};
+      if (!store.friendsByChar[cKey]) store.friendsByChar[cKey] = {};
+      const re = /\[好友id\|([^|\]]+)\|([0-9A-Za-z_\-]+)\]/g;
+      const added = [];
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        const name = String(m[1] || '').trim();
+        const fid = String(m[2] || '').trim();
+        if (!fid) continue;
+        // 建友或更新名称
+        store.friendsByChar[cKey][fid] = {
+          name: name || store.friendsByChar[cKey][fid]?.name || `好友 ${fid}`,
+          updatedAt: Date.now(),
+          createdAt: store.friendsByChar[cKey][fid]?.createdAt || Date.now(),
+        };
+        added.push({ id: fid, name: store.friendsByChar[cKey][fid].name });
+
+        // 初始化 last 摘要（若无）
+        const comp = `${cKey}::${fid}`;
+        if (!store.lastByChatId[comp]) {
+          store.lastByChatId[comp] = { text: '', ts: Date.now() - 1 };
+        }
+      }
+      saveWeChatLocalStore(store);
+      return added;
+    } catch (e) { return []; }
+  }
+
   // 计算列表展示用名称
   function getNameForKey(id) {
     try {
       const st = window.SillyTavern?.getContext?.();
+      if (typeof id === 'string' && id.includes('::')) {
+        const cKey = id.split('::')[0];
+        const fid = id.split('::')[1];
+        const store = getWeChatLocalStore();
+        const name = store?.friendsByChar?.[cKey]?.[fid]?.name;
+        return name || `好友 ${fid}`;
+      }
       if (typeof id === 'string' && id.startsWith('char:')) {
         const cid = id.split(':')[1];
         const name =
@@ -2017,39 +2078,15 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     return '会话';
   }
 
-  // 虚建几个好友（仅当本地没有任何摘要时），用于快速验证“加好友/多会话”显示
-  function seedVirtualFriends() {
-    try {
-      if (localStorage.getItem('wechatSeededV1')) return;
-      const store = getWeChatLocalStore();
-      const base = Date.now();
-      const seeds = [
-        { id: 'char:101', text: '今晚一起打游戏？', ts: base - 1000 * 60 * 5 },
-        { id: 'char:102', text: '明天开会别忘了～', ts: base - 1000 * 60 * 30 },
-        { id: 'char:103', text: '记得看我发你的资料', ts: base - 1000 * 60 * 60 },
-      ];
-      for (const s of seeds) {
-        if (!store.messagesByChatId[s.id]) store.messagesByChatId[s.id] = [];
-        store.messagesByChatId[s.id].push({ from: 'other', text: s.text, ts: s.ts });
-        store.lastByChatId[s.id] = { text: s.text, ts: s.ts };
-      }
-      saveWeChatLocalStore(store);
-      localStorage.setItem('wechatSeededV1', '1');
-    } catch (e) { /* ignore */ }
-  }
-
-  // 根据本地 lastByChatId 生成“会话列表”，并融合 wechatContext 基础信息；按时间倒序
+  // 根据本地 lastByChatId 生成“会话列表”（仅当前角色环境），按时间倒序；不再注入任何演示/虚拟好友
   function getComputedChatList() {
     try {
       const store = getWeChatLocalStore();
       const lastMap = store?.lastByChatId || {};
-      // 若本地完全为空，则种子几位虚拟好友
-      if (!lastMap || Object.keys(lastMap).length === 0) {
-        seedVirtualFriends();
-      }
-      const updatedStore = getWeChatLocalStore();
-      const updatedLast = updatedStore?.lastByChatId || {};
-      const entries = Object.entries(updatedLast);
+      const cKey = getCharKey();
+      if (!cKey) return [];
+
+      const entries = Object.entries(lastMap).filter(([id]) => String(id).startsWith(`${cKey}::`));
       if (entries.length === 0) return [];
 
       const list = entries.map(([id, v]) => {
@@ -2065,13 +2102,21 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         };
       });
 
-      // 时间倒序
       list.sort((a, b) => b._ts - a._ts);
       return list;
     } catch (e) {
       return [];
     }
   }
+
+  // 首次迁移：清空旧数据（按用户确认），仅执行一次
+  try {
+    if (!localStorage.getItem('wechatEnvV2Migrated')) {
+      localStorage.removeItem('wechatLocalStoreV1');
+      localStorage.removeItem('wechatSeededV1');
+      localStorage.setItem('wechatEnvV2Migrated', '1');
+    }
+  } catch (e) { /* ignore */ }
 
   // Expose to other modules
   window.wechatLocalStore = {
@@ -2080,6 +2125,67 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     append: appendLocalMessage,
     updateList: updateChatListFromLocal,
     getComputedChatList,
+    captureFromText: captureFriendsFromText,
+  };
+
+  // 控制台友链工具
+  window.WeChatFriends = {
+    add(friendId, name = '') {
+      try {
+        const store = getWeChatLocalStore();
+        const cKey = getCharKey();
+        if (!cKey) return false;
+        if (!store.friendsByChar) store.friendsByChar = {};
+        if (!store.friendsByChar[cKey]) store.friendsByChar[cKey] = {};
+        store.friendsByChar[cKey][friendId] = {
+          name: name || store.friendsByChar[cKey][friendId]?.name || `好友 ${friendId}`,
+          updatedAt: Date.now(),
+          createdAt: store.friendsByChar[cKey][friendId]?.createdAt || Date.now(),
+        };
+        // 初始化摘要
+        const comp = `${cKey}::${friendId}`;
+        if (!store.lastByChatId[comp]) store.lastByChatId[comp] = { text: '', ts: Date.now() - 1 };
+        saveWeChatLocalStore(store);
+        return true;
+      } catch (e) { return false; }
+    },
+    remove(friendId) {
+      try {
+        const store = getWeChatLocalStore();
+        const cKey = getCharKey();
+        if (!cKey) return false;
+        delete (store.friendsByChar?.[cKey]?.[friendId]);
+        const comp = `${cKey}::${friendId}`;
+        delete store.lastByChatId[comp];
+        delete store.messagesByChatId[comp];
+        saveWeChatLocalStore(store);
+        return true;
+      } catch (e) { return false; }
+    },
+    list() {
+      try {
+        const store = getWeChatLocalStore();
+        const cKey = getCharKey();
+        return Object.entries(store?.friendsByChar?.[cKey] || {}).map(([id, v]) => ({ id, name: v?.name }));
+      } catch (e) { return []; }
+    },
+    clearForCurrentRole() {
+      try {
+        const store = getWeChatLocalStore();
+        const cKey = getCharKey();
+        if (!cKey) return false;
+        // 清理该角色命名空间的好友与消息
+        const friends = store?.friendsByChar?.[cKey] || {};
+        for (const fid of Object.keys(friends)) {
+          const comp = `${cKey}::${fid}`;
+          delete store.lastByChatId[comp];
+          delete store.messagesByChatId[comp];
+        }
+        delete store.friendsByChar[cKey];
+        saveWeChatLocalStore(store);
+        return true;
+      } catch (e) { return false; }
+    }
   };
 
   // Hook: when clicking send button in detail view, persist message
