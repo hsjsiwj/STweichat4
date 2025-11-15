@@ -44,6 +44,7 @@ class WeChatPhone {
                 <div class="actions">
                     <span class="search"></span>
                     <span class="add"></span>
+                    <span class="import" title="导入历史标签"></span>
                 </div>
             </div>
             <div class="wechat-content" id="wechat-content"></div>
@@ -99,6 +100,14 @@ class WeChatPhone {
               text-align: center;
               line-height: 24px;
               font-size: 18px;
+            }
+            .wechat-header .import { background-image: none !important; }
+            .wechat-header .import::after {
+              content: '📥';
+              display: block;
+              text-align: center;
+              line-height: 24px;
+              font-size: 16px;
             }`;
       // 若之前已注入，先移除再注入，确保最新生效
       try {
@@ -291,6 +300,22 @@ class WeChatPhone {
         }
       });
     }
+
+    // 顶部“📥”导入按钮（扫描历史 [好友id|昵称|ID]）
+    const importBtn = frame.querySelector('.wechat-header .import');
+    if (importBtn) {
+      importBtn.addEventListener('click', async () => {
+        try {
+          if (window.wechatImporter && typeof window.wechatImporter.forceImport === 'function') {
+            await window.wechatImporter.forceImport(true);
+          } else {
+            alert('导入器未就绪，请稍后重试');
+          }
+        } catch (_) {
+          alert('导入失败，请查看控制台日志');
+        }
+      });
+    }
   }
 
   // 简易搜索面板（占位版）
@@ -359,7 +384,8 @@ class WeChatPhone {
             `;
       menu.innerHTML = `
                 <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友（输入ID）</div>
-                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">粘贴标签文本添加</div>
+                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">粘贴标签文本添加</div>
+                <div class="item" data-act="import" style="padding:10px 12px;cursor:pointer;">导入历史标签（扫描当前会话）</div>
             `;
       frame.appendChild(menu);
 
@@ -406,6 +432,21 @@ class WeChatPhone {
                 alert('解析失败，请检查格式。');
               }
             }
+            break;
+          }
+          case 'import': {
+            (async () => {
+              try {
+                if (window.wechatImporter && typeof window.wechatImporter.forceImport === 'function') {
+                  await window.wechatImporter.forceImport(true);
+                  refreshUI();
+                } else {
+                  alert('导入器未就绪，请稍后重试');
+                }
+              } catch (e4) {
+                alert('导入失败，请查看控制台。');
+              }
+            })();
             break;
           }
         }
@@ -461,6 +502,36 @@ class WeChatPhone {
     // 仅使用当前角色环境的聚合结果，不注入任何默认/演示数据
     const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
     const chats = computed;
+
+    if (!chats.length) {
+      // 空态：突出“添加好友”的入口，同时提供“导入历史标签”
+      content.innerHTML = `
+        <div class="chat-empty" style="background:#fff;padding:20px;">
+          <div style="color:#999;margin-bottom:12px;">暂无会话。请添加好友或导入含有 [好友id|昵称|ID] 的历史消息标签。</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button id="wechat_add_friend_btn" class="menu_button" style="background:#07C160;color:#fff;">➕ 添加好友（输入ID）</button>
+            <button id="wechat_import_history_btn" class="menu_button" style="background:#777;color:#fff;">📥 导入历史标签</button>
+          </div>
+        </div>`;
+      const addBtn = document.getElementById('wechat_add_friend_btn');
+      addBtn?.addEventListener('click', () => {
+        // 复用“＋”菜单的添加逻辑
+        try {
+          const fidRaw = prompt('请输入好友ID（数字或字母数字，不含空格）：', '');
+          const fid = (fidRaw || '').trim();
+          if (!fid) return;
+          const name = (prompt('可选：输入好友昵称（可留空）：', '') || '').trim();
+          const ok = window.WeChatFriends?.add?.(String(fid), name);
+          if (!ok) alert('添加失败，请确认当前已选中一个角色。');
+          else this.renderChatList();
+        } catch (e) { alert('添加失败，请查看控制台。'); }
+      });
+      const impBtn = document.getElementById('wechat_import_history_btn');
+      impBtn?.addEventListener('click', async () => {
+        try { await window.wechatImporter?.forceImport?.(); this.renderChatList(); } catch (e) { alert('导入失败。'); }
+      });
+      return;
+    }
 
     content.innerHTML = `
             <div class="chat-list">
@@ -1316,6 +1387,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     switch (tab) {
       case 'chat':
         this.setTitle('微信');
+        // 尝试在进入聊天页时导入历史标签（仅当前角色环境）
+        try { window.wechatImporter?.importIfNeeded?.(); } catch (e) { /* ignore */ }
         this._renderChatListDynamic();
         break;
       case 'contacts':
@@ -1933,16 +2006,42 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
   }
 
-  // 稳定角色键：返回 'char:<characterId>'，用于分类与列表预览
-  function getCharKey() {
+  // 兼容多来源的角色ID解析：优先 SillyTavern.getContext().characterId；回退 this_chid；回退 DOM 标记
+  function resolveCharacterIdRobust() {
     try {
       const st = window.SillyTavern?.getContext?.();
       if (st && st.characterId !== undefined && st.characterId !== null) {
-        return `char:${String(st.characterId)}`;
+        return st.characterId;
       }
-    } catch (e) {
-      /* ignore */
-    }
+    } catch (e) { /* ignore */ }
+    try {
+      if (typeof window.this_chid !== 'undefined' && window.this_chid !== null) {
+        return window.this_chid;
+      }
+    } catch (e) { /* ignore */ }
+    try {
+      // 常见角色项节点 data-chid 或 data-character-id
+      const el = document.querySelector('[data-chid].character, [data-character-id].character, [data-chid], [data-character-id]');
+      const val = el?.getAttribute?.('data-chid') ?? el?.getAttribute?.('data-character-id');
+      if (val !== null && val !== undefined && String(val).length) return val;
+    } catch (e) { /* ignore */ }
+    // 最后回退：上一次成功解析的charKey缓存
+    try {
+      const cached = localStorage.getItem('wechat_last_cid');
+      if (cached) return cached;
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  // 稳定角色键：返回 'char:<characterId>'，用于分类与列表预览
+  function getCharKey() {
+    try {
+      const cid = resolveCharacterIdRobust();
+      if (cid !== null && cid !== undefined && String(cid).length) {
+        localStorage.setItem('wechat_last_cid', String(cid));
+        return `char:${String(cid)}`;
+      }
+    } catch (e) { /* ignore */ }
     return '';
   }
 

@@ -286,6 +286,7 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       ];
       const optionalModules = [
         'app/context-sync.js',
+        'app/importer.js',         // 历史标签扫描器：读取以往记录 [好友id|昵称|ID]
         'app/message-app.js',
         'app/add-friend.js',
         'app/build-group.js',
