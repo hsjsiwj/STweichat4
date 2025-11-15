@@ -428,16 +428,9 @@ class WeChatPhone {
   // 占位版：聊天列表（可点击进入会话详情）
   renderChatList() {
     const content = document.getElementById('wechat-content');
-    // 首选：根据本地存储与上下文动态计算会话列表；若为空再回退到 demo
-    const demoChats = [
-      { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
-      { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
-      { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
-    ];
-    const ctx = window.wechatContext;
-    const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
+    // 仅使用当前角色环境的聚合结果，不注入任何默认/演示数据
     const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
-    const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
+    const chats = computed;
 
     content.innerHTML = `
             <div class="chat-list">
@@ -502,11 +495,7 @@ class WeChatPhone {
     const content = document.getElementById('wechat-content');
     this.setTitle(chat?.name || '聊天');
 
-    const demoMsgs = [
-      { from: 'other', text: '你好～' },
-      { from: 'me', text: '你好，有什么事吗？' },
-      { from: 'other', text: chat?.last || '一起学习？' },
-    ];
+    const demoMsgs = [];
 
     // 合并本地存储消息（优先使用本地；否则回退 demo）
     const msgsToRender = (function () {
@@ -542,9 +531,9 @@ class WeChatPhone {
           if (Array.isArray(arr) && arr.length) merged.push(...arr);
         }
 
-        return merged.length ? merged : demoMsgs;
+        return merged;
       } catch (e) {
-        return demoMsgs;
+        return [];
       }
     })();
 
@@ -916,18 +905,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     this._ensureState();
     const content = document.getElementById('wechat-content');
 
-    const demoChats = [
-      { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
-      { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
-      { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
-    ];
-
-    const ctx = window.wechatContext;
-    const st = window.SillyTavern?.getContext?.();
-    const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
     const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
-    const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
-    const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
+    const chats = computed;
 
     content.innerHTML = `
       <div class="chat-list">
@@ -1005,19 +984,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
     let msgs = Array.isArray(providedMessages) ? providedMessages : [];
     if (!msgs.length) {
-      const ctx = window.wechatContext;
-      const st = window.SillyTavern?.getContext?.();
-      const currentIdGuess = String(st?.getCurrentChatId?.() || 'current');
-      if (ctx && ctx.ready && ctx.messagesByChatId && ctx.messagesByChatId[chatId]) {
-        msgs = ctx.messagesByChatId[chatId];
-      }
-      // 兜底演示
-      if (!msgs.length) {
-        msgs = [
-          { from: 'other', text: '你好～' },
-          { from: 'me', text: '你好，有什么事吗？' },
-        ];
-      }
+      // no fallback; keep empty
     }
 
     this.setTitle(chatName);
@@ -1448,16 +1415,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       this._ensureState();
       const content = document.getElementById('wechat-content');
 
-      const demoChats = [
-        { id: 'a1', name: '小明', last: '明天一起吃饭？', time: '下午 3:08', unread: 2, avatar: '🟢' },
-        { id: 'b2', name: '学习交流群', last: '今晚八点开会', time: '下午 2:12', unread: 0, avatar: '🟡' },
-        { id: 'c3', name: '小红', last: '收到~', time: '昨天', unread: 1, avatar: '🟣' },
-      ];
-
-      const ctx = window.wechatContext;
       const computed = window.wechatLocalStore?.getComputedChatList?.() || [];
-      const useCtx = ctx && ctx.ready && Array.isArray(ctx.chats) && ctx.chats.length > 0;
-      const chats = computed.length ? computed : (useCtx ? ctx.chats : demoChats);
+      const chats = computed;
 
       content.innerHTML = `
         <div class="chat-list">
@@ -1630,13 +1589,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         /* ignore */
       }
 
-      // 若仍为空，则仅此时使用演示消息
-      if (!msgs.length) {
-        msgs = [
-          { from: 'other', text: '你好～' },
-          { from: 'me', text: '你好，有什么事吗？' },
-        ];
-      }
+      // 若仍为空，保持为空（不注入演示消息）
 
       this.setTitle(chatName);
 
@@ -2024,7 +1977,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const store = getWeChatLocalStore();
       if (!store.friendsByChar) store.friendsByChar = {};
       if (!store.friendsByChar[cKey]) store.friendsByChar[cKey] = {};
-      const re = /\[好友id\|([^|\]]+)\|([0-9A-Za-z_\-]+)\]/g;
+      const re = /\[好友id\|([^|\]]+)\|([0-9A-Za-z_-]+)\]/g;
       const added = [];
       let m;
       while ((m = re.exec(text)) !== null) {
