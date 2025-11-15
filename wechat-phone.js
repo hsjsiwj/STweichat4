@@ -349,7 +349,7 @@ class WeChatPhone {
                 position: absolute;
                 top: 54px;
                 right: 10px;
-                width: 180px;
+                width: 200px;
                 background: #fff;
                 border: 1px solid #e5e5e5;
                 border-radius: 8px;
@@ -358,26 +358,56 @@ class WeChatPhone {
                 z-index: 10001;
             `;
       menu.innerHTML = `
-                <div class="item" data-act="group" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">发起群聊</div>
-                <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友</div>
-                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">扫一扫</div>
+                <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友（输入ID）</div>
+                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">粘贴标签文本添加</div>
             `;
       frame.appendChild(menu);
+
+      const refreshUI = () => {
+        try {
+          if (window.wechatPhone) {
+            window.wechatPhone._ensureState?.();
+            if (window.wechatPhone.currentTab === 'chat') {
+              window.wechatPhone.renderChatList();
+            } else if (window.wechatPhone.currentTab === 'contacts') {
+              window.wechatPhone.renderContacts();
+            }
+          }
+        } catch (e) { /* ignore */ }
+      };
 
       menu.addEventListener('click', e => {
         const t = e.target;
         if (!(t instanceof Element)) return;
         const act = t.getAttribute('data-act');
         switch (act) {
-          case 'group':
-            alert('发起群聊（占位）');
+          case 'add': {
+            const fidRaw = prompt('请输入好友ID（数字或字母数字，不含空格）：', '');
+            const fid = (fidRaw || '').trim();
+            if (!fid) break;
+            const name = (prompt('可选：输入好友昵称（可留空）：', '') || '').trim();
+            try {
+              const ok = window.WeChatFriends?.add?.(String(fid), name);
+              if (!ok) alert('添加失败，请确认当前已选中一个角色。');
+              else refreshUI();
+            } catch (e2) {
+              alert('添加失败，请查看控制台。');
+            }
             break;
-          case 'add':
-            alert('添加朋友（占位）');
+          }
+          case 'scan': {
+            const text = prompt('请粘贴包含 [好友id|昵称|ID] 的文本：', '');
+            if (text && text.trim()) {
+              try {
+                const added = window.wechatLocalStore?.captureFromText?.(text.trim()) || [];
+                if (!added.length) alert('未识别到有效的好友标签。格式示例：[好友id|李雨婷|8823571]');
+                refreshUI();
+              } catch (e3) {
+                alert('解析失败，请检查格式。');
+              }
+            }
             break;
-          case 'scan':
-            alert('扫一扫（占位）');
-            break;
+          }
         }
         this.closeAddMenu();
       });
@@ -698,37 +728,62 @@ class WeChatPhone {
     });
   }
 
-  // 占位版：通讯录
+  // 通讯录：仅显示当前角色环境下已添加的好友（无默认/演示数据）
   renderContacts() {
     const content = document.getElementById('wechat-content');
-    const groups = {
-      A: ['阿强', '阿美'],
-      B: ['白露', '冰冰'],
-      C: ['陈晨', '超人'],
-    };
-    content.innerHTML = `
-            <div class="contacts" style="background:#fff;">
-              ${Object.keys(groups)
-                .map(
-                  k => `
-                <div class="group">
-                  <div style="padding:6px 12px;background:#f7f7f7;color:#666;font-size:12px;">${k}</div>
-                  ${groups[k]
-                    .map(
-                      n => `
-                    <div class="row" style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;">
-                        <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">😀</div>
-                        <div style="font-size:15px;color:#111;">${n}</div>
-                    </div>
-                  `,
-                    )
-                    .join('')}
-                </div>
-              `,
-                )
-                .join('')}
-            </div>
-        `;
+    try {
+      const st = window.SillyTavern?.getContext?.();
+      const cKey = (st && st.characterId !== undefined && st.characterId !== null) ? `char:${String(st.characterId)}` : '';
+      const store = window.wechatLocalStore?.get?.();
+      const friends = (store?.friendsByChar?.[cKey]) || {};
+      const items = Object.entries(friends);
+
+      if (!cKey) {
+        content.innerHTML = `
+          <div class="contacts" style="background:#fff;">
+            <div style="padding:16px;color:#f00;">未检测到当前角色，请先选择角色。</div>
+          </div>`;
+        return;
+      }
+
+      if (!items.length) {
+        content.innerHTML = `
+          <div class="contacts" style="background:#fff;">
+            <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角“＋ → 添加朋友”。</div>
+          </div>`;
+        return;
+      }
+
+      const rows = items.map(([fid, v]) => {
+        const name = String(v?.name || `好友 ${fid}`);
+        return `
+          <div class="row" data-id="${cKey}::${fid}" data-name="${name}"
+               style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
+            <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">👤</div>
+            <div style="font-size:15px;color:#111;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+            <div style="font-size:12px;color:#999;">${fid}</div>
+          </div>`;
+      }).join('');
+
+      content.innerHTML = `
+        <div class="contacts" style="background:#fff;">
+          ${rows}
+        </div>`;
+
+      // 绑定点击打开该好友会话
+      content.querySelectorAll('.row').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-id');
+          const name = el.getAttribute('data-name') || '聊天';
+          this.renderChatDetail({ id, name });
+        });
+      });
+    } catch (e) {
+      content.innerHTML = `
+        <div class="contacts" style="background:#fff;">
+          <div style="padding:16px;color:#f00;">加载通讯录失败，请查看控制台。</div>
+        </div>`;
+    }
   }
 
   // 占位版：发现
