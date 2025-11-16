@@ -74,10 +74,6 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
           monitorInterval: 3000,
           autoOpen: true,
           autoSendToST: true,
-          // 自定义ID来源：characterId | chatId | characterName | customPath
-          idSource: 'characterId',
-          // 当 idSource = customPath 时生效，示例：characters[characterId].name 或 chatId
-          customIdPath: ''
         };
         if (context) {
           if (!context.extensionSettings.wechat_simulator) {
@@ -89,6 +85,9 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
                 context.extensionSettings.wechat_simulator[k] = defaultSettings[k];
               }
             }
+            // 强制清理旧版本遗留的 ID 配置，避免 Edge/Chrome 行为不一致
+            delete context.extensionSettings.wechat_simulator.idSource;
+            delete context.extensionSettings.wechat_simulator.customIdPath;
             context.saveSettingsDebounced?.();
           }
         }
@@ -106,8 +105,6 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
 
           const setns = ctx.extensionSettings?.wechat_simulator || {};
           const autoChecked = !!(setns.autoSendToST ?? true);
-          const idSource = String(setns.idSource ?? 'characterId');
-          const customPath = String(setns.customIdPath ?? '');
 
           const panel = document.createElement('div');
           panel.id = 'wechat_simulator_settings';
@@ -123,39 +120,11 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
                     <input id="wechat_auto_send_to_st" type="checkbox" ${autoChecked ? 'checked' : ''}/>
                     <span>自动将发送输入转发到 SillyTavern 输入框</span>
                   </label>
-
-                  <div class="flex" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                    <label for="wechat_id_source" style="min-width:120px;">ID 来源</label>
-                    <select id="wechat_id_source" class="menu_button" style="width:auto;">
-                      <option value="characterId">characterId（角色ID）</option>
-                      <option value="chatId">chatId（聊天ID）</option>
-                      <option value="characterName">characterName（角色名）</option>
-                      <option value="customPath">customPath（自定义路径）</option>
-                    </select>
-                    <input id="wechat_custom_id_path" type="text" placeholder="如：characters[characterId].name 或 chatId"
-                           class="text_pole" style="flex:1;min-width:280px;display:none;" />
-                  </div>
-
-                  <div style="color:#999;font-size:12px;line-height:18px;">
-                    说明：当选择 customPath 时，从 SillyTavern.getContext() 的返回对象中按路径取值。支持点/下标访问，如 characters[characterId].name 或 chatId。
-                    将用于消息前缀：发送给id:{取值}\\n\\n消息正文
-                  </div>
                 </div>
               </div>
             </div>
           `;
           root.appendChild(panel);
-
-          // 初始化下拉与输入显示状态
-          const sel = document.getElementById('wechat_id_source');
-          const pathInput = document.getElementById('wechat_custom_id_path');
-          if (sel) {
-            sel.value = idSource;
-          }
-          if (pathInput) {
-            pathInput.value = customPath;
-            pathInput.style.display = (idSource === 'customPath') ? 'block' : 'none';
-          }
 
           // 事件：自动发送
           const cb = document.getElementById('wechat_auto_send_to_st');
@@ -166,31 +135,6 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
               ctx.saveSettingsDebounced?.();
             } catch (err) {
               console.warn('[WeChat Simulator] 保存 autoSendToST 失败:', err);
-            }
-          });
-
-          // 事件：ID 来源选择
-          sel?.addEventListener('change', () => {
-            const v = String(sel.value || 'characterId');
-            try {
-              ctx.extensionSettings.wechat_simulator.idSource = v;
-              ctx.saveSettingsDebounced?.();
-            } catch (err) {
-              console.warn('[WeChat Simulator] 保存 idSource 失败:', err);
-            }
-            if (pathInput) {
-              pathInput.style.display = (v === 'customPath') ? 'block' : 'none';
-            }
-          });
-
-          // 事件：自定义路径
-          pathInput?.addEventListener('change', () => {
-            const v = String(pathInput.value || '').trim();
-            try {
-              ctx.extensionSettings.wechat_simulator.customIdPath = v;
-              ctx.saveSettingsDebounced?.();
-            } catch (err) {
-              console.warn('[WeChat Simulator] 保存 customIdPath 失败:', err);
             }
           });
         } catch (err) {

@@ -371,7 +371,7 @@ class WeChatPhone {
     const content = document.getElementById('wechat-content');
     switch (tab) {
       case 'chat':
-        this.setTitle('微信');
+        this.setTitle('聊天');
         this.renderChatList();
         break;
       case 'contacts':
@@ -1083,52 +1083,11 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         const parts = raw.split('::');
         return parts[parts.length - 1];
       }
+      // 统一逻辑：固定使用 SillyTavern.getContext().characterId 作为 ID 来源
       try {
         const st = window.SillyTavern?.getContext?.();
-        const setns = st?.extensionSettings?.wechat_simulator || {};
-        const source = String(setns.idSource ?? 'characterId');
-
-        const resolveCustomPath = (ctx, path) => {
-          try {
-            if (!path) return '';
-            // 提供 currentChatId 方便表达式直接取用
-            const currentChatId = ctx?.getCurrentChatId?.() ?? ctx?.chatId;
-            // 允许从 ctx 上用点/下标访问：如 characters[characterId].name 或 currentChatId
-            // 注意：仅在本地页面内执行，用于 UI 前缀，不会发送到服务端执行代码
-            const fn = new Function(
-              'ctx',
-              'currentChatId',
-              `
-          try { with(ctx) { return (${path}); } } catch(e){ return ''; }
-        `,
-            );
-            return fn(ctx, currentChatId);
-          } catch (_) {
-            return '';
-          }
-        };
-
-        switch (source) {
-          case 'characterId': {
-            if (st?.characterId !== undefined && st?.characterId !== null) return String(st.characterId);
-            break;
-          }
-          case 'chatId': {
-            const cid = st?.getCurrentChatId?.() ?? st?.chatId;
-            if (cid !== undefined && cid !== null) return String(cid);
-            break;
-          }
-          case 'characterName': {
-            const name = st?.characters?.[st?.characterId]?.name;
-            if (name) return String(name);
-            break;
-          }
-          case 'customPath': {
-            const p = String(setns.customIdPath ?? '').trim();
-            const val = resolveCustomPath(st || {}, p);
-            if (val !== undefined && val !== null && String(val).length) return String(val);
-            break;
-          }
+        if (st && st.characterId !== undefined && st.characterId !== null) {
+          return String(st.characterId);
         }
       } catch (_) {
         /* ignore */ void 0;
@@ -1275,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     this.currentTab = tab;
     switch (tab) {
       case 'chat':
-        this.setTitle('微信');
+        this.setTitle('聊天');
         this._renderChatListDynamic();
         break;
       case 'contacts':
@@ -1725,7 +1684,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       this.currentTab = tab;
       switch (tab) {
         case 'chat':
-          this.setTitle('微信');
+          this.setTitle('聊天');
           this.renderChatList();
           break;
         case 'contacts':
