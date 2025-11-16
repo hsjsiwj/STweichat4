@@ -1,6 +1,6 @@
 /* WeChat Simulator Styles - 模拟微信界面样式，参考flutter-wechat-master布局 */
 
-/* 悬浮按钮 */
+/* 悬浮按钮（圆形绿底，内部显示 Emoji，去除任何截图背景） */
 #wechat-trigger {
   position: fixed;
   bottom: 100px; /* 调整位置，避免遮挡 */
@@ -14,7 +14,10 @@
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  overflow: hidden; /* 确保图片圆角 */
+  background-color: #07C160; /* 微信绿色 */
+  color: #fff;
+  font-size: 28px;
+  overflow: hidden;
 }
 
 /* 微信主框架 */
@@ -82,6 +85,7 @@
     font-size: 17px;
     font-weight: 600;
     border-bottom: 1px solid #e0e0e0;
+    position: relative; /* 允许返回键绝对定位 */
 }
 
 .wechat-header .title {
@@ -137,12 +141,16 @@
     width: 24px;
     height: 24px;
     margin-bottom: 4px;
-    background-size: contain; /* 确保图标完整显示 */
-    background-repeat: no-repeat;
-    background-position: center;
+    background: none !important;
+    position: relative;
 }
-/* bottom tab icons via images */
-.wechat-nav-item .icon.chat { background-image: url('../images/chat-icon.png'); }
-.wechat-nav-item .icon.contacts { background-image: url('../images/contacts-icon.png'); }
-.wechat-nav-item .icon.discover { background-image: url('../images/discover-icon.png'); }
-.wechat-nav-item .icon.me { background-image: url('../images/me-icon.png'); }
+.wechat-nav-item .icon::after{
+  display: block;
+  text-align: center;
+  line-height: 24px;
+  font-size: 18px;
+}
+.wechat-nav-item .icon.chat::after { content: '💬'; }
+.wechat-nav-item .icon.contacts::after { content: '👥'; }
+.wechat-nav-item .icon.discover::after { content: '🧭'; }
+.wechat-nav-item .icon.me::after { content: '👤'; }
