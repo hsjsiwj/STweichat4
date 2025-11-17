@@ -53,6 +53,20 @@
       /* ignore */
     }
 
+    // DOM 兜底：扫描 mesid="1" 容器内的楼层文本
+    try {
+      const nodes = Array.from(
+        document.querySelectorAll('[mesid="1"] .message, [mesid="1"] .mes_text, .mes_text')
+      );
+      if (nodes.length) {
+        const arr = nodes
+          .map(n => String(n.textContent || '').trim())
+          .filter(t => t.length)
+          .map(t => ({ mes: t, text: t, content: t, message: t }));
+        if (arr.length) return arr;
+      }
+    } catch { /* ignore */ }
+
     return [];
   }
 

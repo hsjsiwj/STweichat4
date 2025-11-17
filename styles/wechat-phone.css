@@ -13,8 +13,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  background-color: #07C160; /* 微信绿色 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background-color: #07c160; /* 微信绿色 */
   color: #fff;
   font-size: 28px;
   overflow: hidden;
@@ -31,7 +31,7 @@
   background: #ededed; /* 微信背景色 */
   border-radius: 40px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2); /* 调整阴影 */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* 调整阴影 */
   z-index: 10000;
   display: none;
   flex-direction: column;
@@ -50,62 +50,64 @@
 }
 
 .wechat-status-bar .time {
-    font-weight: bold;
+  font-weight: bold;
 }
 
 .wechat-status-bar .icons span {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    margin-left: 5px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 5px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .wechat-status-bar .signal {
-    background-image: url('../images/signal.png');
+  background-image: url('../images/signal.png');
 }
 .wechat-status-bar .wifi {
-    background-image: url('../images/wifi.png');
+  background-image: url('../images/wifi.png');
 }
 .wechat-status-bar .battery {
-    background-image: url('../images/battery.png');
+  background-image: url('../images/battery.png');
 }
 
-
 .wechat-header {
-    height: 44px; /* 头部高度 */
-    background: #ededed;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 15px;
-    font-size: 17px;
-    font-weight: 600;
-    border-bottom: 1px solid #e0e0e0;
-    position: relative; /* 允许返回键绝对定位 */
+  height: 44px; /* 头部高度 */
+  background: #ededed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  font-size: 17px;
+  font-weight: 600;
+  border-bottom: 1px solid #e0e0e0;
+  position: relative; /* 允许返回键绝对定位 */
 }
 
 .wechat-header .title {
-    flex-grow: 1;
-    text-align: center;
+  flex-grow: 1;
+  text-align: center;
 }
 
 .wechat-header .actions span {
-    width: 24px;
-    height: 24px;
-    margin-left: 15px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    cursor: pointer;
+  width: 24px;
+  height: 24px;
+  margin-left: 15px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  cursor: pointer;
 }
 
 /* header action icons via images */
-.wechat-header .search { background-image: url('../images/search-icon.png'); }
-.wechat-header .add { background-image: url('../images/add-icon.png'); }
-
+.wechat-header .search {
+  background-image: url('../images/search-icon.png');
+}
+.wechat-header .add {
+  background-image: url('../images/add-icon.png');
+}
 
 /* 内容区 */
 .wechat-content {
@@ -118,7 +120,7 @@
 .wechat-nav {
   height: 50px;
   background: #f7f7f7;
-  border-top: 1px solid #E5E5E5;
+  border-top: 1px solid #e5e5e5;
   display: flex;
   justify-content: space-around;
   align-items: center;
@@ -133,8 +135,19 @@
 }
 
 .wechat-nav-item.active {
-  color: #07C160;
+  color: #07c160;
 }
 
 /* 移除底部图标位图，彻底禁用图标占位 */
-.wechat-nav-item .icon { display: none !important; }
+.wechat-nav-item .icon {
+  display: none !important;
+}
+/* emoji 图标样式 */
+.wechat-nav-item .emoji {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 18px;
+}

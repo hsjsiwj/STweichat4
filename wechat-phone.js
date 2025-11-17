@@ -49,15 +49,19 @@ class WeChatPhone {
             <div class="wechat-content" id="wechat-content"></div>
             <div class="wechat-nav">
                 <div class="wechat-nav-item active" data-tab="chat">
+                    <div class="emoji">🗨️</div>
                     <span>微信</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="contacts">
+                    <div class="emoji">👥</div>
                     <span>通讯录</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="discover">
+                    <div class="emoji">🔎</div>
                     <span>发现</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="me">
+                    <div class="emoji">🙂</div>
                     <span>我</span>
                 </div>
             </div>
@@ -185,6 +189,24 @@ class WeChatPhone {
 
   bindNavEvents() {
     const frame = document.getElementById('wechat-frame');
+    // 底部悬浮＋号（快捷添加入口）
+    let fab = frame.querySelector('#wechat-fab-plus');
+    if (!fab) {
+      fab = document.createElement('div');
+      fab.id = 'wechat-fab-plus';
+      fab.title = '添加';
+      fab.style.cssText = `
+        position:absolute;right:14px;bottom:64px;width:42px;height:42px;border-radius:50%;
+        background:#07C160;color:#fff;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 6px 18px rgba(7,193,96,0.35);cursor:pointer;font-size:22px;z-index:3;
+      `;
+      fab.textContent = '＋';
+      frame.appendChild(fab);
+      fab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
+      });
+    }
     const navItems = frame.querySelectorAll('.wechat-nav-item');
     navItems.forEach(item => {
       item.addEventListener('click', () => {
@@ -288,7 +310,8 @@ class WeChatPhone {
             `;
       menu.innerHTML = `
                 <div class="item" data-act="add" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">添加朋友（输入ID）</div>
-                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;">粘贴标签文本添加</div>
+                <div class="item" data-act="scan" style="padding:10px 12px;cursor:pointer;border-bottom:1px solid #f2f2f2;">粘贴标签文本添加</div>
+                <div class="item" data-act="scanHistory" style="padding:10px 12px;cursor:pointer;">从历史消息扫描标签</div>
             `;
       frame.appendChild(menu);
 
@@ -337,6 +360,21 @@ class WeChatPhone {
             }
             break;
           }
+          case 'scanHistory': {
+            try {
+              const res = await window.wechatImporter?.forceImport?.(false);
+              if (res && res.unique >= 0) {
+                alert(`扫描完成：新增/覆盖 ${res.added} 条标签，唯一好友数 ${res.unique}`);
+              } else {
+                alert('未扫描到有效标签。');
+              }
+              refreshUI();
+            } catch (e4) {
+              alert('扫描失败，请查看控制台。');
+              console.warn('[WeChat Simulator] scanHistory failed:', e4);
+            }
+            break;
+          }
           // 已移除导入历史入口，仅保留添加与粘贴标签两种方式
         }
         this.closeAddMenu();
@@ -369,6 +407,7 @@ class WeChatPhone {
       case 'chat':
         this.setTitle('聊天');
         this.renderChatList();
+        try { window.wechatImporter?.importIfNeeded?.(); } catch (_) {}
         break;
       case 'contacts':
         this.setTitle('通讯录');
@@ -917,6 +956,7 @@ class WeChatPhone {
       } catch (e) {
         /* ignore */
       }
+      try { window.wechatImporter?.importIfNeeded?.(); } catch (_) {}
     }
     if (this.isVisible && typeof this.startClock === 'function') {
       try {
