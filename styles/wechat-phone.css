@@ -66,9 +66,8 @@
 .wechat-status-bar .signal {
     background-image: url('../images/signal.png');
 }
-.wechat-status-bar .wifi::after {
-    content: '🛜';
-    font-size: 12px;
+.wechat-status-bar .wifi {
+    background-image: url('../images/wifi.png');
 }
 .wechat-status-bar .battery {
     background-image: url('../images/battery.png');
@@ -141,16 +140,11 @@
     width: 24px;
     height: 24px;
     margin-bottom: 4px;
-    background: none !important;
-    position: relative;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
 }
-.wechat-nav-item .icon::after{
-  display: block;
-  text-align: center;
-  line-height: 24px;
-  font-size: 18px;
-}
-.wechat-nav-item .icon.chat::after { content: '💬'; }
-.wechat-nav-item .icon.contacts::after { content: '👥'; }
-.wechat-nav-item .icon.discover::after { content: '🧭'; }
-.wechat-nav-item .icon.me::after { content: '👤'; }
+.wechat-nav-item .icon.chat { background-image: url('../images/chat-icon.png'); }
+.wechat-nav-item .icon.contacts { background-image: url('../images/contacts-icon.png'); }
+.wechat-nav-item .icon.discover { background-image: url('../images/discover-icon.png'); }
+.wechat-nav-item .icon.me { background-image: url('../images/me-icon.png'); }

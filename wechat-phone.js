@@ -440,6 +440,9 @@ class WeChatPhone {
                         ${c.unread ? `<span style="background:#f54d4d;color:#fff;border-radius:10px;padding:0 6px;font-size:12px;line-height:18px;min-width:18px;text-align:center;">${c.unread}</span>` : ''}
                       </div>
                     </div>
+                    <div class="chat-actions" style="margin-left:8px;">
+                      <button class="chat-delete-btn" data-id="${c.id}" style="background:#ff4d4f;color:#fff;border:none;border-radius:6px;padding:2px 6px;cursor:pointer;display:${c.id.includes('::') ? 'inline-block' : 'none'};">删除</button>
+                    </div>
                   </div>
                 `,
                   )
@@ -468,6 +471,28 @@ class WeChatPhone {
         }
 
         this.renderChatDetail({ id, name });
+      });
+    });
+
+    // 绑定删除按钮（仅好友会话显示）
+    content.querySelectorAll('.chat-delete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = btn.getAttribute('data-id') || '';
+        const idx = key.indexOf('::');
+        if (idx < 0) return; // 非好友会话（角色占位等）
+        const fid = key.substring(idx + 2);
+        if (confirm(`确认删除好友 ${fid} 及其会话？`)) {
+          const ok = window.WeChatFriends?.remove?.(fid);
+          if (ok) {
+            this.renderChatList();
+            if (this.currentView === 'detail' && this.currentChatId === key) {
+              this.loadTabContent('chat');
+            }
+          } else {
+            alert('删除失败，请查看控制台');
+          }
+        }
       });
     });
 
@@ -721,6 +746,7 @@ class WeChatPhone {
             <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">👤</div>
             <div style="font-size:15px;color:#111;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
             <div style="font-size:12px;color:#999;">${fid}</div>
+            <button class="contact-delete-btn" data-fid="${fid}" style="margin-left:8px;background:#ff4d4f;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;">删除</button>
           </div>`;
       }).join('');
 
@@ -735,6 +761,25 @@ class WeChatPhone {
           const id = el.getAttribute('data-id');
           const name = el.getAttribute('data-name') || '聊天';
           this.renderChatDetail({ id, name });
+        });
+      });
+      // 绑定删除按钮（不经过 SillyTavern 输入框）
+      content.querySelectorAll('.contact-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const fid = btn.getAttribute('data-fid');
+          if (!fid) return;
+          if (confirm(`确认删除好友 ${fid} 及其会话？`)) {
+            const ok = window.WeChatFriends?.remove?.(fid);
+            if (ok) {
+              this.renderContacts();
+              if (this.currentView === 'detail' && this.currentChatId && this.currentChatId.includes(`::${fid}`)) {
+                this.loadTabContent('chat');
+              }
+            } else {
+              alert('删除失败，请查看控制台');
+            }
+          }
         });
       });
     } catch (e) {

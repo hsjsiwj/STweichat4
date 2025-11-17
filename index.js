@@ -43,9 +43,8 @@ async function resolveBasePath() {
   const isGood = async (base) => {
     try {
       const resp = await fetch(`${base}/wechat-phone.js`, { method: 'HEAD' });
-      if (!resp.ok) return false;
-      const ct = (resp.headers.get('content-type') || '').toLowerCase();
-      return ct.includes('javascript') || ct.includes('ecmascript') || ct.includes('text/javascript');
+      // 宽松校验：只要请求成功即可，避免因 content-type 误判导致错误回退
+      return resp.ok;
     } catch {
       return false;
     }
@@ -265,6 +264,14 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       Promise.all(optionalModules.map(u => loadScript(u, { optional: true }))).then(results => {
         const okCount = results.filter(r => r.ok).length;
         console.log(`[WeChat Simulator] 可选模块加载完成: ${okCount}/${results.length}`);
+        // 可选模块初始化（若存在）
+        try {
+          if (window.initContextSync) window.initContextSync();
+          if (window.initMessageApp) window.initMessageApp();
+          if (window.initMomentsApp) window.initMomentsApp();
+        } catch (e) {
+          console.warn('[WeChat Simulator] 可选模块初始化失败:', e);
+        }
       });
 
       // 9) 初始化入口按钮与容错实例化
