@@ -59,7 +59,9 @@
   // 解析标签 [好友id|昵称|ID]
   function extractFriendsFromText(text) {
     if (!text || typeof text !== 'string') return [];
-    const re = /\[好友id\|([^|\]]+)\|([0-9A-Za-z_-]+)\]/g;
+    // 兼容 ASCII/全角括号与分隔符，并兼容“好友ID”
+    // 说明：无需对 [ 、| 、- 进行多余转义；仅对 ] 在字符类中转义
+    const re = /[[【](?:好友id|好友ID)\s*[|｜]\s*([^|\]】]+?)\s*[|｜]\s*([0-9A-Za-z_－-]+)\s*[\]】]/g;
     const found = [];
     let m;
     while ((m = re.exec(text)) !== null) {

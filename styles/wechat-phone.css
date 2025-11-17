@@ -136,15 +136,5 @@
   color: #07C160;
 }
 
-.wechat-nav-item .icon {
-    width: 24px;
-    height: 24px;
-    margin-bottom: 4px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}
-.wechat-nav-item .icon.chat { background-image: url('../images/chat-icon.png'); }
-.wechat-nav-item .icon.contacts { background-image: url('../images/contacts-icon.png'); }
-.wechat-nav-item .icon.discover { background-image: url('../images/discover-icon.png'); }
-.wechat-nav-item .icon.me { background-image: url('../images/me-icon.png'); }
+/* 移除底部图标位图，彻底禁用图标占位 */
+.wechat-nav-item .icon { display: none !important; }

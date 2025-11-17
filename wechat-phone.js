@@ -49,19 +49,15 @@ class WeChatPhone {
             <div class="wechat-content" id="wechat-content"></div>
             <div class="wechat-nav">
                 <div class="wechat-nav-item active" data-tab="chat">
-                    <div class="icon chat"></div>
                     <span>微信</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="contacts">
-                    <div class="icon contacts"></div>
                     <span>通讯录</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="discover">
-                    <div class="icon discover"></div>
                     <span>发现</span>
                 </div>
                 <div class="wechat-nav-item" data-tab="me">
-                    <div class="icon me"></div>
                     <span>我</span>
                 </div>
             </div>
@@ -2017,12 +2013,14 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
   function captureFriendsFromText(text) {
     try {
       if (!text || typeof text !== 'string') return [];
-      const cKey = getCharKey();
-      if (!cKey) return [];
+      // 允许在未选择角色时也能解析：落到全局命名空间 'char:__global__'
+      let cKey = getCharKey() || 'char:__global__';
       const store = getWeChatLocalStore();
       if (!store.friendsByChar) store.friendsByChar = {};
       if (!store.friendsByChar[cKey]) store.friendsByChar[cKey] = {};
-      const re = /\[好友id\|([^|\]]+)\|([0-9A-Za-z_-]+)\]/g;
+      // 兼容 ASCII 与全角分隔符/括号，并容忍大小写“好友id/好友ID”
+      // 说明：无需对 [ 、| 、- 进行多余转义；仅对 ] 在字符类中转义
+      const re = /[[【](?:好友id|好友ID)\s*[|｜]\s*([^|\]】]+?)\s*[|｜]\s*([0-9A-Za-z_－-]+)\s*[\]】]/g;
       const added = [];
       let m;
       while ((m = re.exec(text)) !== null) {
