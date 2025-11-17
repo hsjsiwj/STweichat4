@@ -207,24 +207,7 @@ class WeChatPhone {
         if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
       });
     }
-    // 底部悬浮＋号（快捷添加入口）
-    let fab = frame.querySelector('#wechat-fab-plus');
-    if (!fab) {
-      fab = document.createElement('div');
-      fab.id = 'wechat-fab-plus';
-      fab.title = '添加';
-      fab.style.cssText = `
-        position:absolute;right:14px;bottom:64px;width:42px;height:42px;border-radius:50%;
-        background:#07C160;color:#fff;display:flex;align-items:center;justify-content:center;
-        box-shadow:0 6px 18px rgba(7,193,96,0.35);cursor:pointer;font-size:22px;z-index:3;
-      `;
-      fab.textContent = '＋';
-      frame.appendChild(fab);
-      fab.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
-      });
-    }
+    // 注释：上面的代码块是重复的，已经删除
 
     const navItems = frame.querySelectorAll('.wechat-nav-item');
     navItems.forEach(item => {
