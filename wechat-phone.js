@@ -207,6 +207,25 @@ class WeChatPhone {
         if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
       });
     }
+    // 底部悬浮＋号（快捷添加入口）
+    let fab = frame.querySelector('#wechat-fab-plus');
+    if (!fab) {
+      fab = document.createElement('div');
+      fab.id = 'wechat-fab-plus';
+      fab.title = '添加';
+      fab.style.cssText = `
+        position:absolute;right:14px;bottom:64px;width:42px;height:42px;border-radius:50%;
+        background:#07C160;color:#fff;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 6px 18px rgba(7,193,96,0.35);cursor:pointer;font-size:22px;z-index:3;
+      `;
+      fab.textContent = '＋';
+      frame.appendChild(fab);
+      fab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
+      });
+    }
+
     const navItems = frame.querySelectorAll('.wechat-nav-item');
     navItems.forEach(item => {
       item.addEventListener('click', () => {
@@ -407,7 +426,7 @@ class WeChatPhone {
       case 'chat':
         this.setTitle('聊天');
         this.renderChatList();
-        try { window.wechatImporter?.importIfNeeded?.(); } catch (_) {}
+        try { window.wechatImporter?.importIfNeeded?.(); } catch (e) { console.warn('[WeChat Simulator] importIfNeeded failed:', e); }
         break;
       case 'contacts':
         this.setTitle('通讯录');
@@ -754,16 +773,64 @@ class WeChatPhone {
       const st = window.SillyTavern?.getContext?.();
       const cKey = (st && st.characterId !== undefined && st.characterId !== null) ? `char:${String(st.characterId)}` : '';
       const store = window.wechatLocalStore?.get?.();
-      const friends = (store?.friendsByChar?.[cKey]) || {};
-      const items = Object.entries(friends);
 
+      // 若未选角色，展示全局好友（char:__global__）
       if (!cKey) {
+        const gKey = 'char:__global__';
+        const gFriends = (store?.friendsByChar?.[gKey]) || {};
+        const gItems = Object.entries(gFriends);
+        if (!gItems.length) {
+          content.innerHTML = `
+            <div class="contacts" style="background:#fff;">
+              <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角“＋ → 粘贴标签文本添加”。</div>
+            </div>`;
+          return;
+        }
+        const rows = gItems.map(([fid, v]) => {
+          const name = String(v?.name || `好友 ${fid}`);
+          return `
+            <div class="row" data-id="${gKey}::${fid}" data-name="${name}"
+                 style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid #eee;cursor:pointer;">
+              <div style="width:36px;height:36px;border-radius:6px;background:#eaeaea;display:flex;align-items:center;justify-content:center;margin-right:12px;">👤</div>
+              <div style="font-size:15px;color:#111;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+              <div style="font-size:12px;color:#999;">${fid}</div>
+              <button class="contact-delete-global-btn" data-fid="${fid}" style="margin-left:8px;background:#ff9f43;color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;">移除(全局)</button>
+            </div>`;
+        }).join('');
         content.innerHTML = `
           <div class="contacts" style="background:#fff;">
-            <div style="padding:16px;color:#f00;">未检测到当前角色，请先选择角色。</div>
+            <div style="padding:12px 14px;background:#fff7e6;color:#ad6800;border-bottom:1px solid #eee;">
+              当前未选择角色，正在显示“全局好友（未绑定）”。请选择一个角色后可在右上角“＋”中进行粘贴或历史扫描，再绑定到该角色。
+            </div>
+            ${rows}
           </div>`;
-        return;
+
+        // 绑定点击打开聊天详情（基于全局复合键）
+       content.querySelectorAll('.row').forEach(el => {
+         el.addEventListener('click', () => {
+           const id = el.getAttribute('data-id');
+           const name = el.getAttribute('data-name') || '聊天';
+           this.renderChatDetail({ id, name });
+         });
+       });
+       // 全局删除
+       content.querySelectorAll('.contact-delete-global-btn').forEach(btn => {
+         btn.addEventListener('click', (e) => {
+           e.stopPropagation();
+           const fid = btn.getAttribute('data-fid');
+           if (!fid) return;
+           if (confirm(`确认从全局好友中移除 ${fid} 及其会话？`)) {
+             const ok = window.WeChatFriends?.removeGlobal?.(fid);
+             if (ok) this.renderContacts();
+           }
+         });
+       });
+       return;
       }
+
+      // 已选择角色：显示该角色好友
+      const friends = (store?.friendsByChar?.[cKey]) || {};
+      const items = Object.entries(friends);
 
       if (!items.length) {
         content.innerHTML = `
@@ -956,7 +1023,7 @@ class WeChatPhone {
       } catch (e) {
         /* ignore */
       }
-      try { window.wechatImporter?.importIfNeeded?.(); } catch (_) {}
+      try { window.wechatImporter?.importIfNeeded?.(); } catch (e) { console.warn('[WeChat Simulator] importIfNeeded failed:', e); }
     }
     if (this.isVisible && typeof this.startClock === 'function') {
       try {
