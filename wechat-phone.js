@@ -598,7 +598,10 @@ class WeChatPhone {
                         m => `
                         <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
-                            ${m.text}
+                            ${m.imageUrl
+                              ? `<img src="${m.imageUrl}" style="max-width:100%;display:block;border-radius:6px;">`
+                              : String(m.text || '').replace(/</g, '<').replace(/>/g, '>')
+                            }
                           </div>
                         </div>
                     `,
@@ -2126,7 +2129,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           createdAt: store.friendsByChar[cKey][fid]?.createdAt || Date.now(),
         };
         added.push({ id: fid, name: store.friendsByChar[cKey][fid].name });
-
+ 
         // 初始化 last 摘要（若无）
         const comp = `${cKey}::${fid}`;
         if (!store.lastByChatId[comp]) {
@@ -2138,6 +2141,66 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     } catch (e) { return []; }
   }
 
+  // 新增：解析结构化聊天块并写入本地消息（基于当前角色命名空间）
+  // 支持格式：
+  // [和xxx的聊天]
+  // [对方消息|昵称|好友id|文字|内容]
+  // [对方消息|昵称|好友id|表情包|https://...png]
+  // [我方消息|昵称|好友id|文字|内容] 等
+  function captureStructuredChatFromText(text) {
+    try {
+      if (!text || typeof text !== 'string') return { added: 0, friendId: '' };
+      const header = /\[和(.+?)的聊天\]/;
+      if (!header.test(text)) return { added: 0, friendId: '' };
+
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const cKey = getCharKey() || 'char:__global__';
+      const store = getWeChatLocalStore();
+      if (!store.messagesByChatId) store.messagesByChatId = {};
+      if (!store.lastByChatId) store.lastByChatId = {};
+
+      let friendId = '';
+      let added = 0;
+      const msgRe = /^\[(对方消息|我方消息)\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]+)\]$/;
+
+      for (const line of lines) {
+        const m = msgRe.exec(line);
+        if (!m) continue;
+        const side = m[1]; // 对方消息 / 我方消息
+        const _nick = m[2]; // 昵称（可忽略）
+        const fid = String(m[3] || '').trim();
+        const typ = String(m[4] || '').trim();
+        const payload = String(m[5] || '').trim();
+        if (!fid) continue;
+        if (!friendId) friendId = fid;
+
+        const compKey = `${cKey}::${fid}`;
+        if (!store.messagesByChatId[compKey]) store.messagesByChatId[compKey] = [];
+
+        const from = side === '我方消息' ? 'me' : 'other';
+        const ts = Date.now() + added;
+
+        if (/^(表情包|图片)$/i.test(typ)) {
+          store.messagesByChatId[compKey].push({ from, imageUrl: payload, ts, type: 'image' });
+          store.lastByChatId[compKey] = { text: '[图片]', ts };
+        } else if (/^红包$/i.test(typ)) {
+          const textShow = `红包: ${payload}`;
+          store.messagesByChatId[compKey].push({ from, text: textShow, ts, type: 'red_packet' });
+          store.lastByChatId[compKey] = { text: textShow, ts };
+        } else {
+          store.messagesByChatId[compKey].push({ from, text: payload, ts, type: 'text' });
+          store.lastByChatId[compKey] = { text: payload, ts };
+        }
+        added += 1;
+      }
+
+      saveWeChatLocalStore(store);
+      return { added, friendId };
+    } catch (_) {
+      return { added: 0, friendId: '' };
+    }
+  }
+ 
   // 计算列表展示用名称
   function getNameForKey(id) {
     try {
@@ -2214,6 +2277,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     updateList: updateChatListFromLocal,
     getComputedChatList,
     captureFromText: captureFriendsFromText,
+    captureStructuredChatFromText: captureStructuredChatFromText,
   };
 
   // 控制台友链工具
@@ -2373,6 +2437,7 @@ document.addEventListener('wechat-context-updated', (ev) => {
     }
     if (text && window.wechatLocalStore && typeof window.wechatLocalStore.captureFromText === 'function') {
       try { window.wechatLocalStore.captureFromText(text); } catch (e) { /* ignore */ }
+      try { window.wechatLocalStore.captureStructuredChatFromText?.(text); } catch (e) { /* ignore */ }
     }
     try {
       const root = document.getElementById('wechat-content');

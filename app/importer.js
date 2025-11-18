@@ -145,6 +145,8 @@
           }
           addedCount += added.length;
         }
+        // 新增：尝试解析结构化聊天块
+        try { window.wechatLocalStore?.captureStructuredChatFromText?.(text); } catch (e) { /* ignore */ }
       } catch (e) {
         // 兜底：本地解析
         const found = extractFriendsFromText(text);
