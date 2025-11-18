@@ -175,9 +175,27 @@
           }
         });
       }
-      await loadCss(`${extensionBasePath}/styles/drag-helper.css`);
-      // 兜底加载主样式，避免 manifest 未生效时无样式
-      await loadCss(`${extensionBasePath}/styles/wechat-phone-fixed.css`);
+      // 加载聊天记录相关CSS
+      // 加载CSS样式，使用单独的文件加载方式
+      try {
+        await loadCss(`${extensionBasePath}/styles/drag-helper.css`);
+      } catch (e) {
+        console.warn('[WeChat Simulator] drag-helper.css 加载失败:', e);
+      }
+
+      try {
+        // 兜底加载主样式，避免 manifest 未生效时无样式
+        await loadCss(`${extensionBasePath}/styles/wechat-phone-fixed.css`);
+      } catch (e) {
+        console.warn('[WeChat Simulator] wechat-phone-fixed.css 加载失败:', e);
+      }
+
+      try {
+        // 加载聊天记录样式
+        await loadCss(`${extensionBasePath}/styles/chat-record.css`);
+      } catch (e) {
+        console.warn('[WeChat Simulator] chat-record.css 加载失败:', e);
+      }
 
       // 4) 通用加载器（带 MIME fallback：失败后以 fetch+Blob 注入）
       const loadScript = (url, { optional = false } = {}) =>
@@ -223,46 +241,8 @@
           }
         });
 
-      // 4.1) 通用CSS加载器（带 MIME fallback：失败后以 fetch+内联注入）
-      const loadCss = (url) =>
-        new Promise(resolve => {
-          try {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = url;
-            link.onload = () => {
-              console.log(`[WeChat Simulator] CSS加载成功: ${url}`);
-              resolve({ url, ok: true, via: 'link' });
-            };
-            link.onerror = async () => {
-              // 第一次失败，尝试以 fetch 文本 + 内联 <style> 注入，绕过 MIME 类型限制
-              console.warn(`[WeChat Simulator] CSS加载失败: ${url}`);
-              try {
-                const resp = await fetch(url, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const css = await resp.text();
-                const style = document.createElement('style');
-                style.textContent = css;
-                style.onload = () => {
-                  console.warn(`[WeChat Simulator] 通过内联样式加载成功: ${url}`);
-                  resolve({ url, ok: true, via: 'inline' });
-                };
-                style.onerror = () => {
-                  console.error(`[WeChat Simulator] CSS加载失败(内联): ${url}`);
-                  resolve({ url, ok: false });
-                };
-                document.head.appendChild(style);
-              } catch (err) {
-                console.error(`[WeChat Simulator] CSS加载失败(fetch): ${url}`, err);
-                resolve({ url, ok: false });
-              }
-            };
-            document.head.appendChild(link);
-          } catch (e) {
-            console.error(`[WeChat Simulator] CSS加载异常: ${url}`, e);
-            resolve({ url, ok: false });
-          }
-        });
+      // 4.1) 通用CSS加载器（复用已有的 loadCss 函数）
+      // 注意：loadCss 函数已在第149行定义，此处不再重复定义
 
       // 5) 模块列表
       const baseModules = [`${extensionBasePath}/drag-helper.js`, `${extensionBasePath}/wechat-phone.js`];

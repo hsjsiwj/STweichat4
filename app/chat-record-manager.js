@@ -7,8 +7,12 @@ class ChatRecordManager {
         this.isActive = false;
         this.observer = null;
         this.currentFriendId = null;
-        // 添加防重复缓存
+        // 添加防重复缓存 - 改进的去重机制
         this.processedMessages = new Set();
+        this.lastProcessedContent = '';
+        this.debounceTimer = null;
+        this.isProcessing = false;
+        this.processingTimeout = null;
 
         // 延迟初始化依赖类，等待它们加载完成
         this.initialized = false;
@@ -124,15 +128,14 @@ class ChatRecordManager {
     setupMessageListener() {
         // 监听DOM变化，检测新的聊天记录
         this.observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            this.checkAndParseChatRecord(node);
-                        }
-                    });
-                }
-            });
+            // 使用防抖机制，避免频繁触发
+            if (this.debounceTimer) {
+                clearTimeout(this.debounceTimer);
+            }
+
+            this.debounceTimer = setTimeout(() => {
+                this.handleMutations(mutations);
+            }, 300); // 300ms防抖延迟
         });
 
         // 开始观察
@@ -143,8 +146,147 @@ class ChatRecordManager {
     }
 
     /**
+     * 处理DOM变化
+     * @param {MutationRecord[]} mutations - DOM变化记录
+     */
+    handleMutations(mutations) {
+        // 如果正在处理中，跳过
+        if (this.isProcessing) {
+            return;
+        }
+
+        // 添加超时保护，避免长时间卡死
+        if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+        }
+
+        // 设置处理超时
+        this.processingTimeout = setTimeout(() => {
+            console.warn('[ChatRecordManager] 处理超时，强制重置状态');
+            this.isProcessing = false;
+            if (this.debounceTimer) {
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = null;
+            }
+        }, 5000); // 5秒超时
+
+        // 查找所有可能包含聊天记录的文本节点
+        let foundNewContent = false;
+        const textNodes = [];
+
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        // 检查元素本身及其子元素是否包含聊天记录
+                        const textContent = node.textContent || '';
+                        if (textContent.includes('[和') && textContent.includes('的聊天]')) {
+                            textNodes.push(node);
+                            foundNewContent = true;
+                        }
+                    } else if (node.nodeType === Node.TEXT_NODE) {
+                        // 检查文本节点是否包含聊天记录
+                        const textContent = node.textContent || '';
+                        if (textContent.includes('[和') && textContent.includes('的聊天]')) {
+                            textNodes.push(node);
+                            foundNewContent = true;
+                        }
+                    }
+                });
+            }
+        });
+
+        if (!foundNewContent) {
+            // 清除超时定时器并返回
+            if (this.processingTimeout) {
+                clearTimeout(this.processingTimeout);
+                this.processingTimeout = null;
+            }
+            return;
+        }
+
+        // 合并所有找到的文本内容
+        const combinedContent = textNodes.map(node => node.textContent || '').join('\n');
+
+        // 检查是否与上次处理的内容相同（更严格的检查）
+        if (combinedContent === this.lastProcessedContent) {
+            // 清除超时定时器并返回
+            if (this.processingTimeout) {
+                clearTimeout(this.processingTimeout);
+                this.processingTimeout = null;
+            }
+            return;
+        }
+
+        // 标记为正在处理
+        this.isProcessing = true;
+
+        try {
+            // 确保依赖已初始化
+            if (!this.initialized) {
+                this.checkAndInitDependencies();
+                if (!this.initialized) {
+                    return;
+                }
+            }
+
+            // 解析聊天记录
+            const records = this.parser.parseChatRecord(combinedContent);
+            if (records.length > 0) {
+                // 过滤重复记录
+                const filteredRecords = this.filterDuplicateRecords(records);
+                if (filteredRecords.length > 0) {
+                    this.processChatRecords(filteredRecords);
+                    this.lastProcessedContent = combinedContent;
+                }
+            }
+        } catch (error) {
+            console.error('[ChatRecordManager] 处理聊天记录时出错:', error);
+        } finally {
+            // 处理完成，重置标记和超时
+            this.isProcessing = false;
+            if (this.processingTimeout) {
+                clearTimeout(this.processingTimeout);
+                this.processingTimeout = null;
+            }
+        }
+    }
+
+    /**
+     * 过滤重复记录
+     * @param {Array} records - 聊天记录数组
+     * @returns {Array} 过滤后的记录
+     */
+    filterDuplicateRecords(records) {
+        const filteredRecords = [];
+
+        records.forEach(record => {
+            // 为每条记录创建唯一标识
+            const recordKey = `${record.friendId}_${record.friendName}_${record.messages.length}`;
+
+            // 检查是否已处理过此记录
+            if (this.processedMessages.has(recordKey)) {
+                return;
+            }
+
+            // 添加到已处理集合
+            this.processedMessages.add(recordKey);
+            filteredRecords.push(record);
+        });
+
+        // 限制缓存大小，避免内存泄漏
+        if (this.processedMessages.size > 100) {
+            const entries = Array.from(this.processedMessages);
+            this.processedMessages = new Set(entries.slice(-50)); // 保留最近50条
+        }
+
+        return filteredRecords;
+    }
+
+    /**
      * 检查并解析聊天记录
      * @param {Element} node - DOM节点
+     * @deprecated 使用 handleMutations 替代
      */
     checkAndParseChatRecord(node) {
         // 确保依赖已初始化
@@ -156,7 +298,7 @@ class ChatRecordManager {
         const textContent = node.textContent || '';
 
         // 检查是否包含聊天记录格式
-        if (this.parser.isValidChatRecord(textContent)) {
+        if (this.parser && typeof this.parser.isValidChatRecord === 'function' && this.parser.isValidChatRecord(textContent)) {
             const records = this.parser.parseChatRecord(textContent);
             if (records.length > 0) {
                 this.processChatRecords(records);
@@ -266,13 +408,40 @@ class ChatRecordManager {
 
             // 添加错误事件
             img.addEventListener('error', () => {
-                img.style.display = 'none';
-                const fallback = img.nextElementSibling;
-                if (fallback && (fallback.classList.contains('sticker-fallback') || fallback.classList.contains('image-fallback'))) {
-                    fallback.style.display = 'block';
-                }
+                this.handleImageError(img);
             });
         });
+    }
+
+    /**
+     * 处理图片加载错误
+     * @param {HTMLImageElement} img - 图片元素
+     */
+    handleImageError(img) {
+        // 隐藏失败的图片
+        img.style.display = 'none';
+
+        // 显示回退内容
+        const fallback = img.nextElementSibling;
+        if (fallback && (fallback.classList.contains('sticker-fallback') || fallback.classList.contains('image-fallback'))) {
+            fallback.style.display = 'block';
+        }
+
+        // 尝试重新加载图片（使用不同的URL处理方式）
+        const originalSrc = img.getAttribute('data-original-src') || img.src;
+        if (originalSrc && !img.getAttribute('data-original-src')) {
+            // 保存原始URL
+            img.setAttribute('data-original-src', originalSrc);
+
+            // 尝试使用MessageRenderer的URL处理方法
+            const processedUrl = this.renderer.processImageUrl(originalSrc);
+            if (processedUrl !== originalSrc) {
+                // 延迟重试加载
+                setTimeout(() => {
+                    img.src = processedUrl;
+                }, 1000);
+            }
+        }
     }
 
     /**
@@ -472,8 +641,14 @@ class ChatRecordManager {
 
             const records = this.parser.parseChatRecord(text);
             if (records.length > 0) {
-                this.processChatRecords(records);
-                return { success: true, records };
+                // 过滤重复记录
+                const filteredRecords = this.filterDuplicateRecords(records);
+                if (filteredRecords.length > 0) {
+                    this.processChatRecords(filteredRecords);
+                    return { success: true, records: filteredRecords };
+                } else {
+                    return { success: false, message: '所有记录都已存在' };
+                }
             } else {
                 return { success: false, message: '未找到有效的聊天记录格式' };
             }
@@ -550,13 +725,35 @@ class ChatRecordManager {
             this.observer = null;
         }
 
+        if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
+        }
+
         this.isActive = false;
         console.log('[ChatRecordManager] 聊天记录管理器已停止');
     }
 }
 
-// 创建全局实例
-window.chatRecordManager = new ChatRecordManager();
+// 延迟创建全局实例，确保所有依赖都已加载
+function initChatRecordManager() {
+    try {
+        if (!window.chatRecordManager) {
+            window.chatRecordManager = new ChatRecordManager();
+            console.log('[ChatRecordManager] 全局实例已创建');
+        }
+    } catch (error) {
+        console.error('[ChatRecordManager] 创建实例失败:', error);
+    }
+}
+
+// 如果DOM已加载，立即初始化；否则等待DOM加载
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initChatRecordManager);
+} else {
+    // 延迟一点时间，确保其他模块已加载
+    setTimeout(initChatRecordManager, 100);
+}
 
 // 导出类供其他模块使用
 if (typeof module !== 'undefined' && module.exports) {

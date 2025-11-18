@@ -8,7 +8,7 @@
   "license": "MIT",
   "homepage": "https://github.com/hsjsiwj/STweichat4",
   "js": ["index.js"],
-  "css": ["styles/wechat-phone-fixed.css", "styles/drag-helper.css", "styles/chat-record.css"],
+  "css": ["styles/wechat-phone-fixed.css"],
   "sillytavern": {
     "type": "extension",
     "display_name": "微信模拟器增强版",

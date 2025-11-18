@@ -86,8 +86,8 @@ class MessageRenderer {
      */
     static renderStickerMessage(message, options = {}) {
         const imageUrl = message.content;
-        // 确保URL是有效的
-        const validUrl = this.ensureValidUrl(imageUrl);
+        // 使用新的图片URL处理方法
+        const validUrl = this.processImageUrl(imageUrl);
         return `<div class="message-content sticker-content">
             <img src="${validUrl}" alt="表情包" class="sticker-image"
                  onload="this.classList.add('loaded')"
@@ -108,8 +108,8 @@ class MessageRenderer {
      */
     static renderImageMessage(message, options = {}) {
         const imageUrl = message.content;
-        // 确保URL是有效的
-        const validUrl = this.ensureValidUrl(imageUrl);
+        // 使用新的图片URL处理方法
+        const validUrl = this.processImageUrl(imageUrl);
         return `<div class="message-content image-content">
             <img src="${validUrl}" alt="图片" class="message-image"
                  onload="this.classList.add('loaded')"
@@ -389,6 +389,46 @@ class MessageRenderer {
 
         // 其他情况，假设是相对路径，添加当前域名
         return window.location.origin + '/' + url;
+    }
+
+    /**
+     * 处理图片URL，支持更多格式
+     * @param {string} url - 原始URL
+     * @returns {string} 处理后的URL
+     */
+    static processImageUrl(url) {
+        if (!url || typeof url !== 'string') {
+            return '';
+        }
+
+        // 移除可能的查询参数和哈希
+        const cleanUrl = url.split('?')[0].split('#')[0];
+
+        // 如果是常见的图片托管网站，直接返回
+        const imageHosts = [
+            'i.postimg.cc',
+            'i.imgur.com',
+            'imgur.com',
+            'cdn.discordapp.com',
+            'media.discordapp.net',
+            'i.redd.it',
+            'preview.redd.it'
+        ];
+
+        // 检查是否是已知的图片托管网站
+        for (const host of imageHosts) {
+            if (cleanUrl.includes(host)) {
+                // 确保URL是完整的
+                if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+                    return cleanUrl;
+                } else {
+                    return 'https://' + cleanUrl;
+                }
+            }
+        }
+
+        // 对于其他URL，使用标准处理
+        return this.ensureValidUrl(cleanUrl);
     }
 }
 
