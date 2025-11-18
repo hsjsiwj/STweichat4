@@ -8,65 +8,65 @@
   const start = async () => {
     try {
       // 1) 动态确定扩展根路径：.../third-party/<dir>
-// 修正：避免误匹配其它扩展（例如 ST-Prompt-Template），并校验 JS MIME
-let extensionBasePath = '';
-async function resolveBasePath() {
-  const scripts = Array.from(document.getElementsByTagName('script'));
-  const preferredDirs = [
-    '/scripts/extensions/third-party/wechat-extension',
-    '/scripts/extensions/third-party/wechat-extension/dist',
-    '/scripts/extensions/third-party/STweichat4',
-    '/scripts/extensions/third-party/STweichat4/dist',
-    // 移除可能导致混淆的路径
-  ];
+      // 修正：避免误匹配其它扩展（例如 ST-Prompt-Template），并校验 JS MIME
+      let extensionBasePath = '';
+      async function resolveBasePath() {
+        const scripts = Array.from(document.getElementsByTagName('script'));
+        const preferredDirs = [
+          '/scripts/extensions/third-party/wechat-extension',
+          '/scripts/extensions/third-party/wechat-extension/dist',
+          '/scripts/extensions/third-party/STweichat4',
+          '/scripts/extensions/third-party/STweichat4/dist',
+          // 移除可能导致混淆的路径
+        ];
 
-  // 从 currentScript 获取候选
-  const currentSrc = (document.currentScript && document.currentScript.src) || '';
-  const addParentIfValid = (src) => {
-    if (src && src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(src)) {
-      const rel = src.replace(location.origin, '').replace(/\/index\.js(\?.*)?$/, '');
-      if (!preferredDirs.includes(rel)) preferredDirs.unshift(rel);
-    }
-  };
-  addParentIfValid(currentSrc);
+        // 从 currentScript 获取候选
+        const currentSrc = (document.currentScript && document.currentScript.src) || '';
+        const addParentIfValid = src => {
+          if (src && src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(src)) {
+            const rel = src.replace(location.origin, '').replace(/\/index\.js(\?.*)?$/, '');
+            if (!preferredDirs.includes(rel)) preferredDirs.unshift(rel);
+          }
+        };
+        addParentIfValid(currentSrc);
 
-  // 从所有 script 中挑选匹配 index.js 的路径，优先包含 STweichat4
-  const stHit = scripts.find(
-    s => s.src && s.src.includes('/scripts/extensions/third-party/STweichat4/') && /\/index\.js(\?.*)?$/.test(s.src),
-  );
-  addParentIfValid(stHit && stHit.src);
+        // 从所有 script 中挑选匹配 index.js 的路径，优先包含 STweichat4
+        const stHit = scripts.find(
+          s =>
+            s.src && s.src.includes('/scripts/extensions/third-party/STweichat4/') && /\/index\.js(\?.*)?$/.test(s.src),
+        );
+        addParentIfValid(stHit && stHit.src);
 
-  const anyHit = scripts.find(
-    s => s.src && s.src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(s.src),
-  );
-  addParentIfValid(anyHit && anyHit.src);
+        const anyHit = scripts.find(
+          s => s.src && s.src.includes('/scripts/extensions/third-party/') && /\/index\.js(\?.*)?$/.test(s.src),
+        );
+        addParentIfValid(anyHit && anyHit.src);
 
-  // 校验候选：使用 HEAD 请求检测 wechat-phone.js 是否存在且为 javascript
-  const isGood = async (base) => {
-    try {
-      const resp = await fetch(`${base}/wechat-phone.js`, { method: 'HEAD' });
-      // 宽松校验：只要请求成功即可，避免因 content-type 误判导致错误回退
-      return resp.ok;
-    } catch {
-      return false;
-    }
-  };
+        // 校验候选：使用 HEAD 请求检测 wechat-phone.js 是否存在且为 javascript
+        const isGood = async base => {
+          try {
+            const resp = await fetch(`${base}/wechat-phone.js`, { method: 'HEAD' });
+            // 宽松校验：只要请求成功即可，避免因 content-type 误判导致错误回退
+            return resp.ok;
+          } catch {
+            return false;
+          }
+        };
 
-  for (const base of preferredDirs) {
-    // 统一为绝对路径（以 / 开头），避免相对路径被错误解析到其它扩展目录
-    const abs = base.startsWith('/') ? base : base.replace(/^\.\//, '/');
-    // 仅尝试 third-party 目录
-    if (!abs.startsWith('/scripts/extensions/third-party/')) continue;
-    /* eslint-disable no-await-in-loop */
-    if (await isGood(abs)) return abs;
-    /* eslint-enable no-await-in-loop */
-  }
-  // 最终兜底：保持为本扩展的标准目录名，避免误指向其它扩展
-  return '/scripts/extensions/third-party/wechat-extension';
-}
-extensionBasePath = await resolveBasePath();
-window.wechatExtensionPath = extensionBasePath;
-console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionPath);
+        for (const base of preferredDirs) {
+          // 统一为绝对路径（以 / 开头），避免相对路径被错误解析到其它扩展目录
+          const abs = base.startsWith('/') ? base : base.replace(/^\.\//, '/');
+          // 仅尝试 third-party 目录
+          if (!abs.startsWith('/scripts/extensions/third-party/')) continue;
+
+          if (await isGood(abs)) return abs;
+        }
+        // 最终兜底：保持为本扩展的标准目录名，避免误指向其它扩展
+        return '/scripts/extensions/third-party/wechat-extension';
+      }
+      extensionBasePath = await resolveBasePath();
+      window.wechatExtensionPath = extensionBasePath;
+      console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionPath);
 
       // 2) 集成设置（安全容错）
       try {
@@ -190,36 +190,30 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
               resolve({ url, ok: true, via: 'script' });
             };
             tag.onerror = async () => {
-              // 第一次失败，尝试以 fetch 文本 + Blob URL 注入，绕过 text/plain MIME 限制
+              // 第一次失败，尝试以 fetch 文本 + Blob URL 注入，绕过 text/plain MIME 限制（无论是否可选都尝试一次）
               console.warn(`[WeChat Simulator] 模块加载失败: ${url}`);
-              if (optional) {
-                console.warn(`[WeChat Simulator] 可选模块加载失败，继续执行: ${url}`);
-                resolve({ url, ok: false });
-              } else {
-                // 对于必需模块，尝试一次 Blob URL 加载
-                try {
-                  const resp = await fetch(url, { cache: 'no-store' });
-                  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                  const code = await resp.text();
-                  const blob = new Blob([code], { type: 'application/javascript' });
-                  const objUrl = URL.createObjectURL(blob);
-                  const tag2 = document.createElement('script');
-                  tag2.src = objUrl;
-                  tag2.onload = () => {
-                    URL.revokeObjectURL(objUrl);
-                    console.warn(`[WeChat Simulator] 通过 Blob URL 加载成功: ${url}`);
-                    resolve({ url, ok: true, via: 'blob' });
-                  };
-                  tag2.onerror = () => {
-                    URL.revokeObjectURL(objUrl);
-                    console.error(`[WeChat Simulator] 必需模块加载失败(二次): ${url}`);
-                    resolve({ url, ok: false });
-                  };
-                  document.head.appendChild(tag2);
-                } catch (err) {
-                  console.error(`[WeChat Simulator] 必需模块加载失败(fetch): ${url}`, err);
+              try {
+                const resp = await fetch(url, { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const code = await resp.text();
+                const blob = new Blob([code], { type: 'application/javascript' });
+                const objUrl = URL.createObjectURL(blob);
+                const tag2 = document.createElement('script');
+                tag2.src = objUrl;
+                tag2.onload = () => {
+                  URL.revokeObjectURL(objUrl);
+                  console.warn(`[WeChat Simulator] 通过 Blob URL 加载成功: ${url}`);
+                  resolve({ url, ok: true, via: 'blob' });
+                };
+                tag2.onerror = () => {
+                  URL.revokeObjectURL(objUrl);
+                  console.error(`[WeChat Simulator] 模块加载失败(二次): ${url}`);
                   resolve({ url, ok: false });
-                }
+                };
+                document.head.appendChild(tag2);
+              } catch (err) {
+                console.error(`[WeChat Simulator] 模块加载失败(fetch): ${url}`, err);
+                resolve({ url, ok: false });
               }
             };
             document.head.appendChild(tag);
@@ -230,18 +224,18 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         });
 
       // 5) 模块列表
-      const baseModules = [
-        `${extensionBasePath}/drag-helper.js`,
-        `${extensionBasePath}/wechat-phone.js`,
-      ];
+      const baseModules = [`${extensionBasePath}/drag-helper.js`, `${extensionBasePath}/wechat-phone.js`];
       const optionalModules = [
         'app/context-sync.js',
-        'app/importer.js',         // 历史标签扫描器：读取以往记录 [好友id|昵称|ID]
+        'app/importer.js', // 历史标签扫描器：读取以往记录 [好友id|昵称|ID]
         'app/message-app.js',
         'app/add-friend.js',
         'app/build-group.js',
         'app/moments-app.js',
         'app/shop-app.js',
+        'app/chat-record-parser.js', // 聊天记录解析器
+        'app/message-renderer.js', // 消息渲染器
+        'app/chat-record-manager.js', // 聊天记录管理器
       ].map(p => `${extensionBasePath}/${p}`);
 
       // 6) 加载基础模块（并行）
@@ -274,6 +268,12 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
 
       // 7) 启动扩展（无论是否降级，都创建入口）
       initExtension();
+      // 无论可选模块是否加载成功，都挂载一次降级扫描器，保证 GitHub Raw 等 nosniff 场景下也能解析结构化聊天块
+      try {
+        attachNaiveStructuredScanner();
+      } catch (e) {
+        console.warn('[WeChat Simulator] naive scanner attach failed:', e);
+      }
 
       // 创建实例并按设置尝试自动打开
       await ensurePhoneInstance(6);
@@ -298,6 +298,15 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
           if (window.initMomentsApp) window.initMomentsApp();
         } catch (e) {
           console.warn('[WeChat Simulator] 可选模块初始化失败:', e);
+        }
+        // 若 context-sync 未能加载（例如通过 GitHub Raw 的 nosniff 导致），启用降级监听器解析结构化聊天块
+        try {
+          if (!window.initContextSync) {
+            console.warn('[WeChat Simulator] context-sync 未加载，启用降级监听器以解析结构化聊天块。');
+            attachNaiveStructuredScanner();
+          }
+        } catch (e) {
+          console.warn('[WeChat Simulator] 启用降级监听器失败:', e);
         }
       });
 
@@ -392,7 +401,10 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         if (window.wechatPhone) return true;
         // 类存在则直接创建
         if (window.WeChatPhone) {
-          try { window.wechatPhone = new window.WeChatPhone(); return true; } catch (e) {
+          try {
+            window.wechatPhone = new window.WeChatPhone();
+            return true;
+          } catch (e) {
             console.warn('[WeChat Simulator] 创建 WeChatPhone 实例失败:', e);
           }
         }
@@ -411,6 +423,62 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
         return ensurePhoneInstance(retries - 1);
       }
 
+      // 降级：若 context-sync 未加载，启用基于 DOM 的简易扫描器，周期性解析最新一条消息中的结构化聊天块
+      function attachNaiveStructuredScanner() {
+        try {
+          const scan = () => {
+            try {
+              const nodes = document.querySelectorAll('[mesid="1"] .message, [mesid="1"] .mes_text, .mes_text');
+              if (!nodes || !nodes.length) return;
+              const last = nodes[nodes.length - 1];
+              const text = String(last?.textContent || '').trim();
+              if (!text) return;
+              // 先尝试从自由标签中捕获好友 [好友id|昵称|ID]
+              try {
+                window.wechatLocalStore?.captureFromText?.(text);
+              } catch (_e) {
+                console.debug('[WeChat Simulator] captureFromText failed (naive):', _e);
+              }
+              // 解析结构化聊天块（含图片/红包）
+              try {
+                window.wechatLocalStore?.captureStructuredChatFromText?.(text);
+              } catch (_e) {
+                console.debug('[WeChat Simulator] captureStructuredChatFromText failed (naive):', _e);
+              }
+              // 同步列表摘要
+              try {
+                window.wechatLocalStore?.updateList?.(document.getElementById('wechat-content'));
+              } catch (_e) {
+                console.debug('[WeChat Simulator] updateList failed (naive):', _e);
+              }
+            } catch (_e) {
+              console.debug('[WeChat Simulator] naive scan failed:', _e);
+            }
+          };
+
+          // 初次立即扫描一次
+          scan();
+
+          // 观察 DOM 变动（新消息到达）
+          try {
+            const container = document.querySelector('[mesid="1"]') || document.body;
+            if (container && window.MutationObserver) {
+              const obs = new MutationObserver(() => scan());
+              obs.observe(container, { childList: true, subtree: true });
+              window._wechatNaiveObs = obs;
+            }
+          } catch (_e) {
+            console.debug('[WeChat Simulator] MutationObserver attach failed (naive):', _e);
+          }
+
+          // 兜底：每 4 秒轮询一次
+          if (window._wechatNaiveScanTimer) clearInterval(window._wechatNaiveScanTimer);
+          window._wechatNaiveScanTimer = setInterval(scan, 4000);
+        } catch (e) {
+          console.warn('[WeChat Simulator] attachNaiveStructuredScanner 失败:', e);
+        }
+      }
+
       // 10) 暴露调试助手，便于在控制台快速定位“为何没有悬浮按钮/报错”
       window.WeChatSim = {
         path: () => window.wechatExtensionPath,
@@ -421,12 +489,16 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
             hasWeChatPhoneClass: !!window.WeChatPhone,
             hasWeChatPhoneInstance: !!window.wechatPhone,
             triggerExists: !!document.getElementById('wechat-trigger'),
-            cssWechatLoaded: !!Array.from(document.styleSheets || []).find(s => (s.href || '').includes('wechat-phone-fixed.css')),
-            cssDragLoaded: !!Array.from(document.styleSheets || []).find(s => (s.href || '').includes('drag-helper.css')),
+            cssWechatLoaded: !!Array.from(document.styleSheets || []).find(s =>
+              (s.href || '').includes('wechat-phone-fixed.css'),
+            ),
+            cssDragLoaded: !!Array.from(document.styleSheets || []).find(s =>
+              (s.href || '').includes('drag-helper.css'),
+            ),
           };
           console.log('[WeChat Simulator] Debug Status:', status);
           return status;
-        }
+        },
       };
     } catch (e) {
       console.error('[WeChat Simulator] 启动失败:', e);
@@ -455,7 +527,9 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
           trigger.title = '打开微信模拟器';
           document.body.appendChild(trigger);
         }
-      } catch (e) { console.warn('[WeChat Simulator] 显示降级入口按钮失败:', e); }
+      } catch (e) {
+        console.warn('[WeChat Simulator] 显示降级入口按钮失败:', e);
+      }
     }
   };
 

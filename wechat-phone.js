@@ -592,7 +592,7 @@ class WeChatPhone {
 
     content.innerHTML = `
             <div class="chat-detail" style="display:flex;flex-direction:column;height:100%;">
-                <div class="messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
+                <div class="messages chat-messages" style="flex:1;overflow:auto;background:#f7f7f7;padding:10px 10px 60px;">
                     ${msgsToRender
                       .map(
                         m => `
@@ -600,7 +600,9 @@ class WeChatPhone {
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                             ${m.imageUrl
                               ? `<img src="${m.imageUrl}" style="max-width:100%;display:block;border-radius:6px;">`
-                              : String(m.text || '').replace(/</g, '<').replace(/>/g, '>')
+                              : String(m.text || '')
+                                .replace(/</g, '<')
+                                .replace(/>/g, '>')
                             }
                           </div>
                         </div>
@@ -747,6 +749,25 @@ class WeChatPhone {
         /* ignore */
       }
     });
+
+    // 集成聊天记录管理器 - 在聊天详情渲染完成后加载聊天记录
+    if (window.chatRecordManager && chat?.id) {
+      try {
+        // 提取好友ID
+        const friendId = this.extractFriendIdFromChatId(chat.id);
+        if (friendId) {
+          // 设置当前好友ID
+          window.chatRecordManager.currentFriendId = friendId;
+          
+          // 显示好友聊天记录
+          setTimeout(() => {
+            window.chatRecordManager.displayFriendMessages(friendId);
+          }, 100);
+        }
+      } catch (e) {
+        console.warn('[WeChat Phone] 聊天记录集成失败:', e);
+      }
+    }
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         send.click();
@@ -998,6 +1019,25 @@ class WeChatPhone {
     if (titleEl) {
       titleEl.textContent = title;
     }
+  }
+
+  // 辅助函数：从聊天ID中提取好友ID
+  extractFriendIdFromChatId(chatId) {
+    if (!chatId) return null;
+    
+    // 从复合键中提取好友ID
+    if (typeof chatId === 'string' && chatId.includes('::')) {
+      const parts = chatId.split('::');
+      return parts[parts.length - 1];
+    }
+    
+    // 从角色键中提取
+    if (typeof chatId === 'string' && chatId.startsWith('char:')) {
+      const parts = chatId.split(':');
+      return parts[parts.length - 1];
+    }
+    
+    return chatId;
   }
 
   toggle() {
@@ -1569,9 +1609,11 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
             window.WeChatSwitch &&
             typeof window.WeChatSwitch.trySwitchToCharacter === 'function'
           ) {
-            const cid = rawId.split(':')[1];
+            // 仅提取 char:<cid> 部分作为角色ID，忽略 '::好友ID' 部分
+            let cidPart = rawId.replace(/^char:/, '');
+            cidPart = cidPart.split('::')[0];
             try {
-              const switched = await window.WeChatSwitch.trySwitchToCharacter(cid);
+              const switched = await window.WeChatSwitch.trySwitchToCharacter(cidPart);
               switchedToChar = !!switched;
               if (switched && typeof window.refreshWeChatContext === 'function') {
                 await window.refreshWeChatContext();
@@ -1584,12 +1626,15 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
             }
           }
 
-          // 计算有效的 chatId：如果是占位会话，则以 ST 当前会话ID 为准，避免 messagesByChatId 键不一致
+          // 计算有效的 chatId：
+          // - 对于复合键 'char:<cid>::<fid>'，必须保留原键以匹配本地消息存储
+          // - 仅当是“纯占位键”（如 'char:<cid>'）时，才替换为当前 ST 会话ID
           const st = window.SillyTavern?.getContext?.();
           let effectiveId = rawId;
           try {
             const currentId = String(st?.getCurrentChatId?.() || rawId);
-            if (switchedToChar || (rawId && rawId.startsWith('char:'))) {
+            const isComposite = typeof rawId === 'string' && rawId.startsWith('char:') && rawId.includes('::');
+            if (!isComposite && (switchedToChar || (rawId && rawId.startsWith('char:')))) {
               effectiveId = currentId;
             }
           } catch (_) {
@@ -2195,6 +2240,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       }
 
       saveWeChatLocalStore(store);
+      try { console.log('[WeChat LocalStore] 结构化聊天块解析完成:', { added, friendId, cKey }); } catch (e) { /* noop */ }
       return { added, friendId };
     } catch (_) {
       return { added: 0, friendId: '' };
@@ -2235,7 +2281,23 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const store = getWeChatLocalStore();
       const lastMap = store?.lastByChatId || {};
       const cKey = getCharKey();
-      if (!cKey) return [];
+      if (!cKey) {
+        // 未选择角色时，回退展示“全局空间”的会话列表（char:__global__）
+        const gKey = 'char:__global__';
+        const gEntries = Object.entries(lastMap).filter(([id]) => String(id).startsWith(`${gKey}::`));
+        if (gEntries.length === 0) return [];
+        const glist = gEntries.map(([id, v]) => ({
+          id,
+          name: getNameForKey(id),
+          last: String(v?.text || ''),
+          time: formatTimeShort(Number(v?.ts) || Date.now()),
+          unread: 0,
+          avatar: '🟢',
+          _ts: Number(v?.ts) || 0,
+        }));
+        glist.sort((a, b) => b._ts - a._ts);
+        return glist;
+      }
 
       const entries = Object.entries(lastMap).filter(([id]) => String(id).startsWith(`${cKey}::`));
       if (entries.length === 0) return [];
@@ -2437,7 +2499,23 @@ document.addEventListener('wechat-context-updated', (ev) => {
     }
     if (text && window.wechatLocalStore && typeof window.wechatLocalStore.captureFromText === 'function') {
       try { window.wechatLocalStore.captureFromText(text); } catch (e) { /* ignore */ }
-      try { window.wechatLocalStore.captureStructuredChatFromText?.(text); } catch (e) { /* ignore */ }
+      try {
+        const result = window.wechatLocalStore.captureStructuredChatFromText?.(text);
+        if (result && result.added > 0) {
+          console.log('[WeChat Extension] 成功解析结构化聊天块:', result);
+          // 如果解析到了消息，强制刷新当前聊天界面
+          setTimeout(() => {
+            if (window.wechatPhone && window.wechatPhone.currentView === 'detail' && window.wechatPhone.currentChatId) {
+              window.wechatPhone.renderChatDetail(
+                { id: window.wechatPhone.currentChatId, name: window.wechatPhone._currentChatName || '聊天' },
+                undefined
+              );
+            }
+          }, 100);
+        }
+      } catch (e) {
+        console.warn('[WeChat Extension] 结构化聊天块解析失败:', e);
+      }
     }
     try {
       const root = document.getElementById('wechat-content');
