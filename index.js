@@ -246,14 +246,14 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       const baseOk = baseResults.every(r => r.ok);
       if (!baseOk) {
         console.error('[WeChat Simulator] 基础模块加载失败，进入降级模式：仅创建悬浮按钮（功能受限）');
-        
+
         // 记录具体哪些模块加载失败
         baseResults.forEach(result => {
           if (!result.ok) {
             console.error(`[WeChat Simulator] 失败模块: ${result.url}`);
           }
         });
-        
+
         // 尝试单独重新加载每个失败的模块
         for (const result of baseResults) {
           if (!result.ok) {
@@ -418,7 +418,7 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
             hasWeChatPhoneClass: !!window.WeChatPhone,
             hasWeChatPhoneInstance: !!window.wechatPhone,
             triggerExists: !!document.getElementById('wechat-trigger'),
-            cssWechatLoaded: !!Array.from(document.styleSheets || []).find(s => (s.href || '').includes('wechat-phone.css')),
+            cssWechatLoaded: !!Array.from(document.styleSheets || []).find(s => (s.href || '').includes('wechat-phone-fixed.css')),
             cssDragLoaded: !!Array.from(document.styleSheets || []).find(s => (s.href || '').includes('drag-helper.css')),
           };
           console.log('[WeChat Simulator] Debug Status:', status);
