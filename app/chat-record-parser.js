@@ -145,6 +145,9 @@ class ChatRecordStorage {
                 parsedData[this.currentCharacterId] = {};
             }
             
+            // 创建全局去重缓存，防止同一会话中的重复消息
+            const deduplicationCache = new Set();
+            
             // 合并或更新记录
             records.forEach(record => {
                 const friendId = record.friendId;
@@ -161,14 +164,23 @@ class ChatRecordStorage {
                 // 添加新消息，避免重复
                 const existingRecord = parsedData[this.currentCharacterId][friendId];
                 record.messages.forEach(newMsg => {
-                    const isDuplicate = existingRecord.messages.some(existingMsg => 
-                        existingMsg.type === newMsg.type && 
-                        existingMsg.content === newMsg.content &&
-                        Math.abs(existingMsg.timestamp - newMsg.timestamp) < 1000
-                    );
+                    // 创建消息的唯一标识
+                    const messageKey = `${newMsg.type}_${newMsg.content}_${newMsg.friendId}`;
+                    
+                    // 检查是否已存在于去重缓存中
+                    if (deduplicationCache.has(messageKey)) {
+                        return;
+                    }
+                    
+                    // 检查是否已存在于现有消息中（更严格的去重）
+                    const isDuplicate = existingRecord.messages.some(existingMsg => {
+                        const existingKey = `${existingMsg.type}_${existingMsg.content}_${existingMsg.friendId}`;
+                        return existingKey === messageKey;
+                    });
                     
                     if (!isDuplicate) {
                         existingRecord.messages.push(newMsg);
+                        deduplicationCache.add(messageKey);
                     }
                 });
                 

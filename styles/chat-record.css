@@ -103,6 +103,8 @@
     display: block;
     opacity: 0;
     transition: opacity 0.3s ease;
+    object-fit: contain;
+    background-color: #f9f9f9;
 }
 
 .sticker-image.loaded {

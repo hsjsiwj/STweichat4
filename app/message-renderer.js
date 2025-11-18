@@ -86,10 +86,13 @@ class MessageRenderer {
      */
     static renderStickerMessage(message, options = {}) {
         const imageUrl = message.content;
+        // 确保URL是有效的
+        const validUrl = this.ensureValidUrl(imageUrl);
         return `<div class="message-content sticker-content">
-            <img src="${imageUrl}" alt="表情包" class="sticker-image" 
+            <img src="${validUrl}" alt="表情包" class="sticker-image"
                  onload="this.classList.add('loaded')"
-                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                 crossorigin="anonymous">
             <div class="sticker-fallback" style="display:none;">
                 <div class="sticker-error">表情包加载失败</div>
                 <div class="sticker-url">${this.escapeHtml(imageUrl)}</div>
@@ -105,11 +108,14 @@ class MessageRenderer {
      */
     static renderImageMessage(message, options = {}) {
         const imageUrl = message.content;
+        // 确保URL是有效的
+        const validUrl = this.ensureValidUrl(imageUrl);
         return `<div class="message-content image-content">
-            <img src="${imageUrl}" alt="图片" class="message-image" 
+            <img src="${validUrl}" alt="图片" class="message-image"
                  onload="this.classList.add('loaded')"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                 onclick="window.open('${imageUrl}', '_blank')">
+                 onclick="window.open('${validUrl}', '_blank')"
+                 crossorigin="anonymous">
             <div class="image-fallback" style="display:none;">
                 <div class="image-error">图片加载失败</div>
                 <div class="image-url">${this.escapeHtml(imageUrl)}</div>

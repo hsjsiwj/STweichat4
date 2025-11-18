@@ -10,6 +10,8 @@ class ChatRecordManager {
         this.isActive = false;
         this.observer = null;
         this.currentFriendId = null;
+        // 添加防重复缓存
+        this.processedMessages = new Set();
         this.init();
     }
 
@@ -155,8 +157,40 @@ class ChatRecordManager {
         // 合并现有消息和聊天记录
         messageContainer.innerHTML = existingMessages + chatRecordMessagesHtml;
         
+        // 处理图片加载事件
+        this.setupImageLoadEvents(messageContainer);
+        
         // 滚动到底部
         messageContainer.scrollTop = messageContainer.scrollHeight;
+    }
+
+    /**
+     * 设置图片加载事件
+     * @param {Element} container - 消息容器
+     */
+    setupImageLoadEvents(container) {
+        // 为所有图片添加加载事件监听
+        const images = container.querySelectorAll('.sticker-image, .message-image');
+        images.forEach(img => {
+            // 如果图片已经加载完成，跳过
+            if (img.complete || img.classList.contains('loaded')) {
+                return;
+            }
+            
+            // 添加加载事件
+            img.addEventListener('load', () => {
+                img.classList.add('loaded');
+            });
+            
+            // 添加错误事件
+            img.addEventListener('error', () => {
+                img.style.display = 'none';
+                const fallback = img.nextElementSibling;
+                if (fallback && fallback.classList.contains('sticker-fallback') || fallback.classList.contains('image-fallback')) {
+                    fallback.style.display = 'block';
+                }
+            });
+        });
     }
 
     /**
