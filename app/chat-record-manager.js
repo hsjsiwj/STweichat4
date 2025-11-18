@@ -4,6 +4,20 @@
  */
 class ChatRecordManager {
     constructor() {
+        // 确保依赖类已加载
+        if (typeof ChatRecordStorage === 'undefined') {
+            console.error('[ChatRecordManager] ChatRecordStorage 类未加载');
+            return;
+        }
+        if (typeof ChatRecordParser === 'undefined') {
+            console.error('[ChatRecordManager] ChatRecordParser 类未加载');
+            return;
+        }
+        if (typeof MessageRenderer === 'undefined') {
+            console.error('[ChatRecordManager] MessageRenderer 类未加载');
+            return;
+        }
+        
         this.storage = new ChatRecordStorage();
         this.parser = new ChatRecordParser();
         this.renderer = new MessageRenderer();
