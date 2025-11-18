@@ -174,7 +174,7 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       }
       await loadCss(`${extensionBasePath}/styles/drag-helper.css`);
       // 兜底加载主样式，避免 manifest 未生效时无样式
-      await loadCss(`${extensionBasePath}/styles/wechat-phone.css`);
+      await loadCss(`${extensionBasePath}/styles/wechat-phone-fixed.css`);
 
       // 4) 通用加载器（带 MIME fallback：失败后以 fetch+Blob 注入）
       const loadScript = (url, { optional = false } = {}) =>

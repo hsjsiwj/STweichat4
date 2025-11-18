@@ -1,12 +1,29 @@
 {
-    "display_name": "STweichat4",
-    "loading_order": 100,
-    "requires": [],
-    "optional": [],
-    "js": "index.js",
-    "css": "styles/wechat-phone.css",
-    "author": "Grok",
-    "version": "1.1",
-    "homePage": "",
-    "description": "模拟微信界面扩展：自动探测扩展路径、基础UI(微信/通讯录/发现/我)与简易交互(会话/输入/占位朋友圈/商城)，可选模块按需加载"
+  "name": "WeChat Simulator",
+  "version": "1.2.0",
+  "description": "模拟微信界面，基础UI + 简易交互，占位模块可选加载 + 路径探测 + 降级容错",
+  "author": "hsjsiwj",
+  "license": "MIT",
+  "homepage": "https://github.com/hsjsiwj/STweichat4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hsjsiwj/STweichat4.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "keywords": [
+    "sillytavern",
+    "extension",
+    "wechat",
+    "simulator"
+  ],
+  "sillytavern": {
+    "type": "extension",
+    "display_name": "微信模拟器",
+    "load_after": [],
+    "requires_restart": false
+  }
 }
