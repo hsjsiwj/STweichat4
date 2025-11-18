@@ -15,7 +15,7 @@ async function resolveBasePath() {
   const preferredDirs = [
     '/scripts/extensions/third-party/STweichat4',
     '/scripts/extensions/third-party/STweichat4/dist',
-    '/scripts/extensions/third-party/wechat-extension',
+    // 移除可能导致混淆的路径
   ];
 
   // 从 currentScript 获取候选
@@ -188,36 +188,40 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
             };
             tag.onerror = async () => {
               // 第一次失败，尝试以 fetch 文本 + Blob URL 注入，绕过 text/plain MIME 限制
-              try {
-                const resp = await fetch(url, { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const code = await resp.text();
-                const blob = new Blob([code], { type: 'application/javascript' });
-                const objUrl = URL.createObjectURL(blob);
-                const tag2 = document.createElement('script');
-                tag2.src = objUrl;
-                tag2.onload = () => {
-                  URL.revokeObjectURL(objUrl);
-                  console.warn('[WeChat Simulator] MIME fallback via Blob URL:', url);
-                  resolve({ url, ok: true, via: 'blob' });
-                };
-                tag2.onerror = () => {
-                  URL.revokeObjectURL(objUrl);
-                  const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(二次): ${url}`;
-                  if (optional) { console.warn(msg); } else { console.error(msg); }
-                  resolve({ url, ok: false });
-                };
-                document.head.appendChild(tag2);
-              } catch (err) {
-                const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(fetch): ${url}`;
-                if (optional) { console.warn(msg, err); } else { console.error(msg, err); }
+              console.warn(`[WeChat Simulator] 模块加载失败: ${url}`);
+              if (optional) {
+                console.warn(`[WeChat Simulator] 可选模块加载失败，继续执行: ${url}`);
                 resolve({ url, ok: false });
+              } else {
+                // 对于必需模块，尝试一次 Blob URL 加载
+                try {
+                  const resp = await fetch(url, { cache: 'no-store' });
+                  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                  const code = await resp.text();
+                  const blob = new Blob([code], { type: 'application/javascript' });
+                  const objUrl = URL.createObjectURL(blob);
+                  const tag2 = document.createElement('script');
+                  tag2.src = objUrl;
+                  tag2.onload = () => {
+                    URL.revokeObjectURL(objUrl);
+                    console.warn(`[WeChat Simulator] 通过 Blob URL 加载成功: ${url}`);
+                    resolve({ url, ok: true, via: 'blob' });
+                  };
+                  tag2.onerror = () => {
+                    URL.revokeObjectURL(objUrl);
+                    console.error(`[WeChat Simulator] 必需模块加载失败(二次): ${url}`);
+                    resolve({ url, ok: false });
+                  };
+                  document.head.appendChild(tag2);
+                } catch (err) {
+                  console.error(`[WeChat Simulator] 必需模块加载失败(fetch): ${url}`, err);
+                  resolve({ url, ok: false });
+                }
               }
             };
             document.head.appendChild(tag);
           } catch (e) {
-            const msg = `[WeChat Simulator] ${optional ? '可选' : '必需'}模块加载失败(异常): ${url}`;
-            if (optional) { console.warn(msg, e); } else { console.error(msg, e); }
+            console.error(`[WeChat Simulator] 模块加载异常: ${url}`, e);
             resolve({ url, ok: false });
           }
         });
@@ -242,7 +246,27 @@ console.log('[WeChat Simulator] 扩展路径解析为:', window.wechatExtensionP
       const baseOk = baseResults.every(r => r.ok);
       if (!baseOk) {
         console.error('[WeChat Simulator] 基础模块加载失败，进入降级模式：仅创建悬浮按钮（功能受限）');
-        // 不提前 return，继续创建入口，便于用户可见并调试
+        
+        // 记录具体哪些模块加载失败
+        baseResults.forEach(result => {
+          if (!result.ok) {
+            console.error(`[WeChat Simulator] 失败模块: ${result.url}`);
+          }
+        });
+        
+        // 尝试单独重新加载每个失败的模块
+        for (const result of baseResults) {
+          if (!result.ok) {
+            try {
+              const retryResult = await loadScript(result.url);
+              if (retryResult.ok) {
+                console.log(`[WeChat Simulator] 重试加载成功: ${result.url}`);
+              }
+            } catch (e) {
+              console.error(`[WeChat Simulator] 重试加载失败: ${result.url}`, e);
+            }
+          }
+        }
       }
 
       // 7) 启动扩展（无论是否降级，都创建入口）

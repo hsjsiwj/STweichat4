@@ -363,18 +363,20 @@ class WeChatPhone {
             break;
           }
           case 'scanHistory': {
-            try {
-              const res = await window.wechatImporter?.forceImport?.(false);
-              if (res && res.unique >= 0) {
-                alert(`扫描完成：新增/覆盖 ${res.added} 条标签，唯一好友数 ${res.unique}`);
-              } else {
-                alert('未扫描到有效标签。');
+            (async () => {
+              try {
+                const res = await window.wechatImporter?.forceImport?.(false);
+                if (res && res.unique >= 0) {
+                  alert(`扫描完成：新增/覆盖 ${res.added} 条标签，唯一好友数 ${res.unique}`);
+                } else {
+                  alert('未扫描到有效标签。');
+                }
+                refreshUI();
+              } catch (e4) {
+                alert('扫描失败，请查看控制台。');
+                console.warn('[WeChat Simulator] scanHistory failed:', e4);
               }
-              refreshUI();
-            } catch (e4) {
-              alert('扫描失败，请查看控制台。');
-              console.warn('[WeChat Simulator] scanHistory failed:', e4);
-            }
+            })();
             break;
           }
           // 已移除导入历史入口，仅保留添加与粘贴标签两种方式

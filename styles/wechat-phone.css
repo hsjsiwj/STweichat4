@@ -64,13 +64,16 @@
 }
 
 .wechat-status-bar .signal {
-  background-image: url('../images/signal.png');
+  /* 使用内联 SVG 替代外部图片资源 */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDEyIDEyIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMSIgZmlsbD0iY2NyIgY3g9IjEiIHI9IjEiLz48L3N2Zz4=');
 }
 .wechat-status-bar .wifi {
-  background-image: url('../images/wifi.png');
+  /* 使用内联 SVG 替代外部图片资源 */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDEyIDEyIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNQSIgZmlsbD0iY2NyIgY3g9IjEiIHI9IjEiLz48L3N2Zz4=');
 }
 .wechat-status-bar .battery {
-  background-image: url('../images/battery.png');
+  /* 使用内联 SVG 替代外部图片资源 */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMiIgdmlld0JveD0iMCAwIDEyIDEyIiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIxIiB5PSIzIiB3aWR0aD0iOCIgaGVpZ2h0PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48cmVjdCB4PSIxIiB5PSIxIiB3aWR0aD0iOCIgaGVpZ2h0PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=');
 }
 
 .wechat-header {
@@ -103,10 +106,12 @@
 
 /* header action icons via images */
 .wechat-header .search {
-  background-image: url('../images/search-icon.png');
+  /* 使用内联 SVG 替代外部图片资源 */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIjI0iIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiBzdHJva2Utd2lkdGg9IjIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxjaXJjbGUgY3g9IjExIiBjeT0iMTEiIHI9IjgiPjwvY2lyY2xlPjxwYXRoIGQ9Ik0yMSAyMS00LjM1LTQuMzUiPjwvcGF0aD48L3N2Zz4=');
 }
 .wechat-header .add {
-  background-image: url('../images/add-icon.png');
+  /* 使用内联 SVG 替代外部图片资源 */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIjI0iIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJjdXJyZW50Q29sb3IiBzdHJva2Utd2lkdGg9IjIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48bGluZSB4MT0iMTIiIHkxPSIxMiIgeTI9IjE5Ij48L2xpbmU+PGxpbmUgeDE9IjUiIHkxPSIxMiIgeTI9IjE5Ij48L2xpbmU+PC9zdmc+');
 }
 
 /* 内容区 */
