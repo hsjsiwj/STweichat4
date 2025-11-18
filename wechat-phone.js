@@ -18,7 +18,7 @@ class WeChatPhone {
     cssLink.rel = 'stylesheet';
     // 加上时间戳强制刷新，避免浏览器缓存旧样式（底栏图标仍显示截图的问题）
     const ts = Date.now();
-    cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone.css?v=${ts}`;
+    cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone-fixed.css?v=${ts}`;
     document.head.appendChild(cssLink);
   }
 
