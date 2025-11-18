@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天记录功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #07C160;
+            color: white;
+            padding: 16px;
+            text-align: center;
+        }
+        .content {
+            padding: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .test-section h3 {
+            margin: 0;
+            padding: 12px 16px;
+            background: #f8f8f8;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .test-content {
+            padding: 16px;
+        }
+        .test-input {
+            width: 100%;
+            height: 120px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .test-button {
+            background: #07C160;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .test-button:hover {
+            background: #06a850;
+        }
+        .result {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f0f9ff;
+            border: 1px solid #d1e7ff;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .error {
+            background: #fff2f0;
+            border-color: #ffccc7;
+            color: #ff4d4f;
+        }
+        .success {
+            background: #f6ffed;
+            border-color: #b7eb8f;
+            color: #52c41a;
+        }
+        .sample-text {
+            background: #f8f8f8;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>聊天记录功能测试</h1>
+        </div>
+        <div class="content">
+            <div class="test-section">
+                <h3>聊天记录解析测试</h3>
+                <div class="test-content">
+                    <div class="sample-text">示例聊天记录格式：
+[和赵飞儿的聊天]
+[对方消息|赵飞儿|886520|文字|行了，加上了。]
+[对方消息|赵飞儿|886520|红包|200]
+[对方消息|赵飞儿|886520|文字|给你的零花钱，省着点花，别他妈一天到晚就知道打飞机。]
+[对方消息|赵飞-儿|886520|文字|给姨妈我发个骚表情看看，让姨妈看看你这小骚货平时都用什么勾搭小姑娘。]
+[对方消息|赵飞儿|886520|表情包|https://i.postimg.cc/tg58GRFd/image.png]</div>
+                    <textarea id="chatInput" class="test-input" placeholder="在此输入聊天记录文本进行测试..."></textarea>
+                    <button id="parseButton" class="test-button">解析聊天记录</button>
+                    <div id="parseResult" class="result" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <h3>存储功能测试</h3>
+                <div class="test-content">
+                    <button id="saveButton" class="test-button">保存测试数据</button>
+                    <button id="loadButton" class="test-button">加载测试数据</button>
+                    <button id="clearButton" class="test-button">清空测试数据</button>
+                    <div id="storageResult" class="result" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="test-section">
+                <h3>渲染功能测试</h3>
+                <div class="test-content">
+                    <div id="renderResult" style="border: 1px solid #e5e5e5; border-radius: 4px; padding: 16px; min-height: 200px; background: #fafafa;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加载必要的模块 -->
+    <script src="app/chat-record-parser.js"></script>
+    <script src="app/message-renderer.js"></script>
+    <script src="app/chat-record-manager.js"></script>
+
+    <script>
+        // 模拟SillyTavern环境
+        window.SillyTavern = {
+            getContext: () => ({
+                characterId: 'test-character-123',
+                extensionSettings: {
+                    wechat_simulator: {
+                        autoSendToST: false
+                    }
+                }
+            })
+        };
+
+        // 模拟扩展路径
+        window.wechatExtensionPath = '.';
+
+        // 测试数据
+        const testChatRecord = `[和赵飞儿的聊天]
+[对方消息|赵飞儿|886520|文字|行了，加上了。]
+[对方消息|赵飞儿|886520|红包|200]
+[对方消息|赵飞儿|886520|文字|给你的零花钱，省着点花，别他妈一天到晚就知道打飞机。]
+[对方消息|赵飞-儿|886520|文字|给姨妈我发个骚表情看看，让姨妈看看你这小骚货平时都用什么勾搭小姑娘。]
+[对方消息|赵飞儿|886520|表情包|https://i.postimg.cc/tg58GRFd/image.png]`;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatInput = document.getElementById('chatInput');
+            const parseButton = document.getElementById('parseButton');
+            const parseResult = document.getElementById('parseResult');
+            const saveButton = document.getElementById('saveButton');
+            const loadButton = document.getElementById('loadButton');
+            const clearButton = document.getElementById('clearButton');
+            const storageResult = document.getElementById('storageResult');
+            const renderResult = document.getElementById('renderResult');
+
+            // 设置示例文本
+            chatInput.value = testChatRecord;
+
+            // 解析按钮事件
+            parseButton.addEventListener('click', () => {
+                try {
+                    const text = chatInput.value;
+                    const records = ChatRecordParser.parseChatRecord(text);
+                    
+                    parseResult.className = 'result success';
+                    parseResult.style.display = 'block';
+                    parseResult.textContent = `解析成功！找到 ${records.length} 条聊天记录。\n\n` + JSON.stringify(records, null, 2);
+
+                    // 渲染测试
+                    if (records.length > 0) {
+                        const messagesHtml = MessageRenderer.renderMessageList(records[0].messages, {
+                            showTimestamp: true,
+                            groupByDate: true
+                        });
+                        renderResult.innerHTML = messagesHtml;
+                    }
+
+                    // 保存到存储
+                    if (window.chatRecordManager) {
+                        window.chatRecordManager.storage.saveRecords(records);
+                    }
+                } catch (error) {
+                    parseResult.className = 'result error';
+                    parseResult.style.display = 'block';
+                    parseResult.textContent = `解析失败：${error.message}`;
+                }
+            });
+
+            // 保存按钮事件
+            saveButton.addEventListener('click', () => {
+                try {
+                    const text = chatInput.value;
+                    const result = window.chatRecordManager.manualParseChatRecord(text);
+                    
+                    storageResult.className = result.success ? 'result success' : 'result error';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = result.success 
+                        ? `保存成功！${JSON.stringify(result.records, null, 2)}`
+                        : `保存失败：${result.message}`;
+                } catch (error) {
+                    storageResult.className = 'result error';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = `保存失败：${error.message}`;
+                }
+            });
+
+            // 加载按钮事件
+            loadButton.addEventListener('click', () => {
+                try {
+                    const friendsList = window.chatRecordManager.getFriendsList();
+                    
+                    storageResult.className = 'result success';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = `好友列表：\n${JSON.stringify(friendsList, null, 2)}`;
+                } catch (error) {
+                    storageResult.className = 'result error';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = `加载失败：${error.message}`;
+                }
+            });
+
+            // 清空按钮事件
+            clearButton.addEventListener('click', () => {
+                try {
+                    const success = window.chatRecordManager.clearAllChatRecords();
+                    
+                    storageResult.className = success ? 'result success' : 'result error';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = success ? '清空成功！' : '清空失败！';
+                    
+                    renderResult.innerHTML = '';
+                } catch (error) {
+                    storageResult.className = 'result error';
+                    storageResult.style.display = 'block';
+                    storageResult.textContent = `清空失败：${error.message}`;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

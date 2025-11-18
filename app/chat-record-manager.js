@@ -4,29 +4,79 @@
  */
 class ChatRecordManager {
     constructor() {
-        // 确保依赖类已加载
-        if (typeof ChatRecordStorage === 'undefined') {
-            console.error('[ChatRecordManager] ChatRecordStorage 类未加载');
-            return;
-        }
-        if (typeof ChatRecordParser === 'undefined') {
-            console.error('[ChatRecordManager] ChatRecordParser 类未加载');
-            return;
-        }
-        if (typeof MessageRenderer === 'undefined') {
-            console.error('[ChatRecordManager] MessageRenderer 类未加载');
-            return;
-        }
-        
-        this.storage = new ChatRecordStorage();
-        this.parser = new ChatRecordParser();
-        this.renderer = new MessageRenderer();
         this.isActive = false;
         this.observer = null;
         this.currentFriendId = null;
         // 添加防重复缓存
         this.processedMessages = new Set();
+
+        // 延迟初始化依赖类，等待它们加载完成
+        this.initialized = false;
+        this.initDependencies();
+
+        // 尽早初始化基础功能
         this.init();
+    }
+
+    /**
+     * 初始化依赖类
+     */
+    initDependencies() {
+        // 尝试立即初始化依赖类
+        this.checkAndInitDependencies();
+
+        // 如果依赖类未加载，设置定时检查
+        if (!this.initialized) {
+            const checkInterval = setInterval(() => {
+                this.checkAndInitDependencies();
+                if (this.initialized) {
+                    clearInterval(checkInterval);
+                }
+            }, 500);
+
+            // 10秒后停止检查，避免无限循环
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                if (!this.initialized) {
+                    console.warn('[ChatRecordManager] 依赖类初始化超时，某些功能可能不可用');
+                }
+            }, 10000);
+        }
+    }
+
+    /**
+     * 检查并初始化依赖类
+     */
+    checkAndInitDependencies() {
+        if (this.initialized) return;
+
+        try {
+            if (typeof ChatRecordStorage !== 'undefined') {
+                this.storage = new ChatRecordStorage();
+            } else {
+                console.warn('[ChatRecordManager] ChatRecordStorage 类未加载');
+            }
+
+            if (typeof ChatRecordParser !== 'undefined') {
+                this.parser = new ChatRecordParser();
+            } else {
+                console.warn('[ChatRecordManager] ChatRecordParser 类未加载');
+            }
+
+            if (typeof MessageRenderer !== 'undefined') {
+                this.renderer = new MessageRenderer();
+            } else {
+                console.warn('[ChatRecordManager] MessageRenderer 类未加载');
+            }
+
+            // 如果所有关键依赖都已加载，标记为已初始化
+            if (this.storage && this.parser && this.renderer) {
+                this.initialized = true;
+                console.log('[ChatRecordManager] 所有依赖类已加载并初始化');
+            }
+        } catch (error) {
+            console.error('[ChatRecordManager] 依赖类初始化失败:', error);
+        }
     }
 
     /**
@@ -47,13 +97,13 @@ class ChatRecordManager {
     setup() {
         // 加载CSS样式
         this.loadStyles();
-        
+
         // 设置消息监听器
         this.setupMessageListener();
-        
+
         // 集成到现有的微信扩展
         this.integrateWithWeChatExtension();
-        
+
         this.isActive = true;
         console.log('[ChatRecordManager] 聊天记录管理器已启动');
     }
@@ -97,8 +147,14 @@ class ChatRecordManager {
      * @param {Element} node - DOM节点
      */
     checkAndParseChatRecord(node) {
+        // 确保依赖已初始化
+        if (!this.initialized) {
+            this.checkAndInitDependencies();
+            if (!this.initialized) return;
+        }
+
         const textContent = node.textContent || '';
-        
+
         // 检查是否包含聊天记录格式
         if (this.parser.isValidChatRecord(textContent)) {
             const records = this.parser.parseChatRecord(textContent);
@@ -113,14 +169,20 @@ class ChatRecordManager {
      * @param {Array} records - 解析后的聊天记录
      */
     processChatRecords(records) {
+        // 确保依赖已初始化
+        if (!this.initialized) {
+            this.checkAndInitDependencies();
+            if (!this.initialized) return;
+        }
+
         // 保存记录
         this.storage.saveRecords(records);
-        
+
         // 更新UI
         records.forEach(record => {
             this.updateFriendChatUI(record);
         });
-        
+
         // 触发事件通知其他组件
         this.dispatchChatRecordUpdate(records);
     }
@@ -131,12 +193,12 @@ class ChatRecordManager {
      */
     updateFriendChatUI(record) {
         const friendId = record.friendId;
-        
+
         // 如果当前正在查看该好友的聊天，更新消息显示
         if (this.currentFriendId === friendId) {
             this.displayFriendMessages(friendId);
         }
-        
+
         // 更新好友列表中的最后消息
         this.updateFriendListItem(record);
     }
@@ -146,34 +208,40 @@ class ChatRecordManager {
      * @param {string} friendId - 好友ID
      */
     displayFriendMessages(friendId) {
+        // 确保依赖已初始化
+        if (!this.initialized) {
+            this.checkAndInitDependencies();
+            if (!this.initialized) return;
+        }
+
         // 首先从新的聊天记录存储中获取
         let friendRecord = this.storage.getFriendRecords(friendId);
-        
+
         // 如果没有找到，尝试从现有的本地存储中获取
         if (!friendRecord) {
             friendRecord = this.getFriendRecordFromLegacyStore(friendId);
         }
-        
+
         if (!friendRecord) return;
-        
+
         const messageContainer = document.querySelector('.chat-messages');
         if (!messageContainer) return;
-        
+
         // 保留现有的消息（如SillyTavern的消息）
         const existingMessages = messageContainer.innerHTML;
-        
+
         // 渲染聊天记录消息
         const chatRecordMessagesHtml = this.renderer.renderMessageList(friendRecord.messages, {
             showTimestamp: true,
             groupByDate: true
         });
-        
+
         // 合并现有消息和聊天记录
         messageContainer.innerHTML = existingMessages + chatRecordMessagesHtml;
-        
+
         // 处理图片加载事件
         this.setupImageLoadEvents(messageContainer);
-        
+
         // 滚动到底部
         messageContainer.scrollTop = messageContainer.scrollHeight;
     }
@@ -190,17 +258,17 @@ class ChatRecordManager {
             if (img.complete || img.classList.contains('loaded')) {
                 return;
             }
-            
+
             // 添加加载事件
             img.addEventListener('load', () => {
                 img.classList.add('loaded');
             });
-            
+
             // 添加错误事件
             img.addEventListener('error', () => {
                 img.style.display = 'none';
                 const fallback = img.nextElementSibling;
-                if (fallback && fallback.classList.contains('sticker-fallback') || fallback.classList.contains('image-fallback')) {
+                if (fallback && (fallback.classList.contains('sticker-fallback') || fallback.classList.contains('image-fallback'))) {
                     fallback.style.display = 'block';
                 }
             });
@@ -217,21 +285,21 @@ class ChatRecordManager {
             // 获取当前角色键
             const charKey = this.getCurrentCharacterKey();
             if (!charKey) return null;
-            
+
             // 从现有本地存储中获取消息
             const store = window.wechatLocalStore?.get?.();
             if (!store) return null;
-            
+
             const compositeKey = `${charKey}::${friendId}`;
             const messages = store.messagesByChatId?.[compositeKey] || [];
-            
+
             if (messages.length === 0) return null;
-            
+
             // 转换为新的格式
             return {
                 friendId: friendId,
                 friendName: this.getFriendNameFromLegacyStore(friendId),
-                messages: messages.map(msg => ({
+                messages: messages.map(msg =>({
                     friendName: msg.friendName || '',
                     friendId: friendId,
                     type: msg.type || '文字',
@@ -254,10 +322,10 @@ class ChatRecordManager {
         try {
             const charKey = this.getCurrentCharacterKey();
             if (!charKey) return `好友 ${friendId}`;
-            
+
             const store = window.wechatLocalStore?.get?.();
             if (!store) return `好友 ${friendId}`;
-            
+
             return store.friendsByChar?.[charKey]?.[friendId]?.name || `好友 ${friendId}`;
         } catch (error) {
             return `好友 ${friendId}`;
@@ -287,9 +355,9 @@ class ChatRecordManager {
     updateFriendListItem(record) {
         const friendId = record.friendId;
         const lastMessage = record.messages[record.messages.length - 1];
-        
+
         if (!lastMessage) return;
-        
+
         // 查找对应的好友列表项
         const friendItem = document.querySelector(`[data-friend-id="${friendId}"]`);
         if (friendItem) {
@@ -298,7 +366,7 @@ class ChatRecordManager {
             if (lastMessageEl) {
                 lastMessageEl.textContent = this.getLastMessagePreview(lastMessage);
             }
-            
+
             // 更新时间
             const timeEl = friendItem.querySelector('.message-time');
             if (timeEl) {
@@ -329,7 +397,7 @@ class ChatRecordManager {
             case '链接':
                 return '[链接]';
             default:
-                return message.content.length > 20 
+                return message.content.length > 20
                     ? message.content.substring(0, 20) + '...'
                     : message.content;
         }
@@ -377,8 +445,10 @@ class ChatRecordManager {
      */
     handleWeChatContextUpdate() {
         // 重新加载当前角色的聊天记录
-        this.storage = new ChatRecordStorage();
-        
+        if (this.initialized) {
+            this.storage = new ChatRecordStorage();
+        }
+
         // 如果当前正在查看聊天，刷新显示
         if (this.currentFriendId) {
             this.displayFriendMessages(this.currentFriendId);
@@ -392,6 +462,14 @@ class ChatRecordManager {
      */
     manualParseChatRecord(text) {
         try {
+            // 确保依赖已初始化
+            if (!this.initialized) {
+                this.checkAndInitDependencies();
+                if (!this.initialized) {
+                    return { success: false, message: '依赖类未初始化' };
+                }
+            }
+
             const records = this.parser.parseChatRecord(text);
             if (records.length > 0) {
                 this.processChatRecords(records);
@@ -410,6 +488,7 @@ class ChatRecordManager {
      * @returns {Array} 好友列表
      */
     getFriendsList() {
+        if (!this.initialized) return [];
         return this.storage.getFriendsList();
     }
 
@@ -419,6 +498,7 @@ class ChatRecordManager {
      * @returns {Object|null} 好友聊天记录
      */
     getFriendChatRecords(friendId) {
+        if (!this.initialized) return null;
         return this.storage.getFriendRecords(friendId);
     }
 
@@ -428,6 +508,7 @@ class ChatRecordManager {
      * @returns {boolean} 是否删除成功
      */
     deleteFriendChatRecords(friendId) {
+        if (!this.initialized) return false;
         return this.storage.deleteFriendRecords(friendId);
     }
 
@@ -436,6 +517,7 @@ class ChatRecordManager {
      * @returns {boolean} 是否清空成功
      */
     clearAllChatRecords() {
+        if (!this.initialized) return false;
         return this.storage.clearAllRecords();
     }
 
@@ -445,6 +527,7 @@ class ChatRecordManager {
      * @returns {string} JSON格式的聊天记录
      */
     exportChatRecords(friendId = null) {
+        if (!this.initialized) return null;
         return this.storage.exportRecords(friendId);
     }
 
@@ -454,6 +537,7 @@ class ChatRecordManager {
      * @returns {boolean} 是否导入成功
      */
     importChatRecords(jsonData) {
+        if (!this.initialized) return false;
         return this.storage.importRecords(jsonData);
     }
 
@@ -465,7 +549,7 @@ class ChatRecordManager {
             this.observer.disconnect();
             this.observer = null;
         }
-        
+
         this.isActive = false;
         console.log('[ChatRecordManager] 聊天记录管理器已停止');
     }

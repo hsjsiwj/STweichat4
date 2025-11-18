@@ -274,6 +274,10 @@
         'app/build-group.js',
         'app/moments-app.js',
         'app/shop-app.js',
+      ].map(p => `${extensionBasePath}/${p}`);
+
+      // 聊天记录模块设为关键模块，确保它们能正常加载
+      const chatRecordModules = [
         'app/chat-record-parser.js', // 聊天记录解析器
         'app/message-renderer.js', // 消息渲染器
         'app/chat-record-manager.js', // 聊天记录管理器
@@ -305,6 +309,21 @@
             }
           }
         }
+      }
+
+      // 6.5) 加载聊天记录模块（并行）
+      const chatRecordResults = await Promise.all(chatRecordModules.map(u => loadScript(u)));
+      const chatRecordOk = chatRecordResults.every(r => r.ok);
+      if (!chatRecordOk) {
+        console.warn('[WeChat Simulator] 聊天记录模块加载失败，相关功能将不可用');
+        // 记录具体哪些模块加载失败
+        chatRecordResults.forEach(result => {
+          if (!result.ok) {
+            console.error(`[WeChat Simulator] 失败的聊天记录模块: ${result.url}`);
+          }
+        });
+      } else {
+        console.log('[WeChat Simulator] 聊天记录模块加载成功');
       }
 
       // 7) 启动扩展（无论是否降级，都创建入口）
@@ -520,7 +539,7 @@
         }
       }
 
-      // 10) 暴露调试助手，便于在控制台快速定位“为何没有悬浮按钮/报错”
+      // 10) 暴露调试助手，便于在控制台快速定位"为何没有悬浮按钮/报错"
       window.WeChatSim = {
         path: () => window.wechatExtensionPath,
         printStatus() {

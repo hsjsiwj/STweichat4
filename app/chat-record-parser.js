@@ -6,7 +6,7 @@ class ChatRecordParser {
     // 主解析正则表达式
     static CHAT_RECORD_REGEX = /\[和([^\]]+)的聊天\]((?:\[对方消息\|[^\]]+\])+)/g;
     static MESSAGE_REGEX = /\[对方消息\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]+)\]/g;
-    
+
     /**
      * 解析聊天记录文本
      * @param {string} text - 包含聊天记录的文本
@@ -15,14 +15,14 @@ class ChatRecordParser {
     static parseChatRecord(text) {
         const records = [];
         let match;
-        
+
         // 重置正则表达式的lastIndex
         this.CHAT_RECORD_REGEX.lastIndex = 0;
-        
+
         while ((match = this.CHAT_RECORD_REGEX.exec(text)) !== null) {
             const friendName = match[1];
             const messagesText = match[2];
-            
+
             const messages = this.parseMessages(messagesText);
             if (messages.length > 0) {
                 records.push({
@@ -32,10 +32,10 @@ class ChatRecordParser {
                 });
             }
         }
-        
+
         return records;
     }
-    
+
     /**
      * 解析单条消息
      * @param {string} messagesText - 消息文本
@@ -44,10 +44,10 @@ class ChatRecordParser {
     static parseMessages(messagesText) {
         const messages = [];
         let match;
-        
+
         // 重置正则表达式的lastIndex
         this.MESSAGE_REGEX.lastIndex = 0;
-        
+
         while ((match = this.MESSAGE_REGEX.exec(messagesText)) !== null) {
             const [, friendName, friendId, messageType, content] = match;
             messages.push({
@@ -58,10 +58,10 @@ class ChatRecordParser {
                 timestamp: Date.now()
             });
         }
-        
+
         return messages;
     }
-    
+
     /**
      * 验证是否为有效的聊天记录格式
      * @param {string} text - 待验证的文本
@@ -70,7 +70,7 @@ class ChatRecordParser {
     static isValidChatRecord(text) {
         return this.CHAT_RECORD_REGEX.test(text);
     }
-    
+
     /**
      * 从文本中提取所有可能的聊天记录
      * @param {string} text - 包含聊天记录的文本
@@ -79,15 +79,32 @@ class ChatRecordParser {
     static extractAllChatRecords(text) {
         const records = [];
         const lines = text.split('\n');
-        
+
         lines.forEach(line => {
             if (this.isValidChatRecord(line)) {
                 const parsedRecords = this.parseChatRecord(line);
                 records.push(...parsedRecords);
             }
         });
-        
+
         return records;
+    }
+
+    /**
+     * 过滤重复记录
+     * @param {Array} records - 聊天记录数组
+     * @returns {Array} 过滤后的记录
+     */
+    static filterDuplicateRecords(records) {
+        const seen = new Set();
+        return records.filter(record => {
+            const key = `${record.friendId}_${record.content}_${record.type}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
     }
 }
 
@@ -100,7 +117,7 @@ class ChatRecordStorage {
         this.storageKey = 'wechat_chat_records';
         this.currentCharacterId = this.getCurrentCharacterId();
     }
-    
+
     /**
      * 获取当前角色卡ID
      * @returns {string} 当前角色卡ID
@@ -111,12 +128,12 @@ class ChatRecordStorage {
             const context = window.SillyTavern.getContext();
             return context.characterId || 'default';
         }
-        
+
         // 备用方法：从URL或其他地方获取
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get('char') || 'default';
     }
-    
+
     /**
      * 获取所有聊天记录
      * @returns {Object} 所有聊天记录
@@ -131,7 +148,7 @@ class ChatRecordStorage {
             return {};
         }
     }
-    
+
     /**
      * 保存聊天记录
      * @param {Array} records - 聊天记录数组
@@ -140,14 +157,14 @@ class ChatRecordStorage {
         try {
             const allData = localStorage.getItem(this.storageKey) || '{}';
             const parsedData = JSON.parse(allData);
-            
+
             if (!parsedData[this.currentCharacterId]) {
                 parsedData[this.currentCharacterId] = {};
             }
-            
+
             // 创建全局去重缓存，防止同一会话中的重复消息
             const deduplicationCache = new Set();
-            
+
             // 合并或更新记录
             records.forEach(record => {
                 const friendId = record.friendId;
@@ -160,42 +177,42 @@ class ChatRecordStorage {
                         updatedAt: Date.now()
                     };
                 }
-                
+
                 // 添加新消息，避免重复
                 const existingRecord = parsedData[this.currentCharacterId][friendId];
                 record.messages.forEach(newMsg => {
                     // 创建消息的唯一标识
                     const messageKey = `${newMsg.type}_${newMsg.content}_${newMsg.friendId}`;
-                    
+
                     // 检查是否已存在于去重缓存中
                     if (deduplicationCache.has(messageKey)) {
                         return;
                     }
-                    
+
                     // 检查是否已存在于现有消息中（更严格的去重）
                     const isDuplicate = existingRecord.messages.some(existingMsg => {
                         const existingKey = `${existingMsg.type}_${existingMsg.content}_${existingMsg.friendId}`;
                         return existingKey === messageKey;
                     });
-                    
+
                     if (!isDuplicate) {
                         existingRecord.messages.push(newMsg);
                         deduplicationCache.add(messageKey);
                     }
                 });
-                
+
                 // 更新时间戳
                 existingRecord.updatedAt = Date.now();
-                
+
                 // 按时间戳排序
                 existingRecord.messages.sort((a, b) => a.timestamp - b.timestamp);
-                
+
                 // 限制消息数量，避免存储过多
                 if (existingRecord.messages.length > 1000) {
                     existingRecord.messages = existingRecord.messages.slice(-1000);
                 }
             });
-            
+
             localStorage.setItem(this.storageKey, JSON.stringify(parsedData));
             return true;
         } catch (error) {
@@ -203,7 +220,7 @@ class ChatRecordStorage {
             return false;
         }
     }
-    
+
     /**
      * 获取特定好友的聊天记录
      * @param {string} friendId - 好友ID
@@ -213,7 +230,7 @@ class ChatRecordStorage {
         const allRecords = this.getAllRecords();
         return allRecords[friendId] || null;
     }
-    
+
     /**
      * 删除特定好友的聊天记录
      * @param {string} friendId - 好友ID
@@ -223,20 +240,20 @@ class ChatRecordStorage {
         try {
             const allData = localStorage.getItem(this.storageKey) || '{}';
             const parsedData = JSON.parse(allData);
-            
+
             if (parsedData[this.currentCharacterId] && parsedData[this.currentCharacterId][friendId]) {
                 delete parsedData[this.currentCharacterId][friendId];
                 localStorage.setItem(this.storageKey, JSON.stringify(parsedData));
                 return true;
             }
-            
+
             return false;
         } catch (error) {
             console.error('删除聊天记录失败:', error);
             return false;
         }
     }
-    
+
     /**
      * 清空当前角色卡的所有聊天记录
      * @returns {boolean} 是否清空成功
@@ -245,7 +262,7 @@ class ChatRecordStorage {
         try {
             const allData = localStorage.getItem(this.storageKey) || '{}';
             const parsedData = JSON.parse(allData);
-            
+
             parsedData[this.currentCharacterId] = {};
             localStorage.setItem(this.storageKey, JSON.stringify(parsedData));
             return true;
@@ -254,14 +271,14 @@ class ChatRecordStorage {
             return false;
         }
     }
-    
+
     /**
      * 获取所有好友列表
      * @returns {Array} 好友列表
      */
     getFriendsList() {
         const allRecords = this.getAllRecords();
-        return Object.values(allRecords).map(record => ({
+        return Object.values(allRecords).map(record =>({
             friendId: record.friendId,
             friendName: record.friendName,
             lastMessage: record.messages[record.messages.length - 1],
@@ -269,7 +286,7 @@ class ChatRecordStorage {
             updatedAt: record.updatedAt
         })).sort((a, b) => b.updatedAt - a.updatedAt);
     }
-    
+
     /**
      * 导出聊天记录
      * @param {string} friendId - 好友ID，如果不提供则导出所有记录
@@ -289,7 +306,7 @@ class ChatRecordStorage {
             return null;
         }
     }
-    
+
     /**
      * 导入聊天记录
      * @param {string} jsonData - JSON格式的聊天记录数据

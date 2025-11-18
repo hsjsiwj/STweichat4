@@ -11,9 +11,9 @@ class MessageRenderer {
      */
     static renderMessage(message, options = {}) {
         const { showTimestamp = true, isOwnMessage = false } = options;
-        
+
         let messageHtml = '';
-        
+
         switch (message.type) {
             case '文字':
                 messageHtml = this.renderTextMessage(message, options);
@@ -43,13 +43,13 @@ class MessageRenderer {
                 messageHtml = this.renderTextMessage(message, options);
                 break;
         }
-        
+
         return `<div class="message-item ${message.type}-message ${isOwnMessage ? 'own-message' : 'friend-message'}" data-timestamp="${message.timestamp}">
             ${messageHtml}
             ${showTimestamp ? `<div class="message-time">${this.formatTime(message.timestamp)}</div>` : ''}
         </div>`;
     }
-    
+
     /**
      * 渲染文字消息
      * @param {Object} message - 消息对象
@@ -60,7 +60,7 @@ class MessageRenderer {
         const content = this.processMessageContent(message.content);
         return `<div class="message-content text-content">${content}</div>`;
     }
-    
+
     /**
      * 渲染红包消息
      * @param {Object} message - 消息对象
@@ -77,7 +77,7 @@ class MessageRenderer {
             </div>
         </div>`;
     }
-    
+
     /**
      * 渲染表情包消息
      * @param {Object} message - 消息对象
@@ -99,7 +99,7 @@ class MessageRenderer {
             </div>
         </div>`;
     }
-    
+
     /**
      * 渲染图片消息
      * @param {Object} message - 消息对象
@@ -122,7 +122,7 @@ class MessageRenderer {
             </div>
         </div>`;
     }
-    
+
     /**
      * 渲染语音消息
      * @param {Object} message - 消息对象
@@ -139,7 +139,7 @@ class MessageRenderer {
             </div>
         </div>`;
     }
-    
+
     /**
      * 渲染视频消息
      * @param {Object} message - 消息对象
@@ -157,7 +157,7 @@ class MessageRenderer {
             </video>
         </div>`;
     }
-    
+
     /**
      * 渲染位置消息
      * @param {Object} message - 消息对象
@@ -174,7 +174,7 @@ class MessageRenderer {
             </div>
         </div>`;
     }
-    
+
     /**
      * 渲染链接消息
      * @param {Object} message - 消息对象
@@ -194,7 +194,7 @@ class MessageRenderer {
             </a>
         </div>`;
     }
-    
+
     /**
      * 处理消息内容，支持表情符号、链接等
      * @param {string} content - 原始内容
@@ -202,16 +202,16 @@ class MessageRenderer {
      */
     static processMessageContent(content) {
         let processedContent = this.escapeHtml(content);
-        
+
         // 处理链接
         processedContent = this.processLinks(processedContent);
-        
+
         // 处理换行
         processedContent = processedContent.replace(/\n/g, '<br>');
-        
+
         return processedContent;
     }
-    
+
     /**
      * 处理链接
      * @param {string} content - 内容
@@ -223,7 +223,7 @@ class MessageRenderer {
             return `<a href="${url}" target="_blank" class="message-link">${url}</a>`;
         });
     }
-    
+
     /**
      * 解析URL
      * @param {string} url - URL字符串
@@ -249,7 +249,7 @@ class MessageRenderer {
             };
         }
     }
-    
+
     /**
      * HTML转义
      * @param {string} text - 原始文本
@@ -260,7 +260,7 @@ class MessageRenderer {
         div.textContent = text;
         return div.innerHTML;
     }
-    
+
     /**
      * 格式化时间
      * @param {number} timestamp - 时间戳
@@ -271,38 +271,38 @@ class MessageRenderer {
         const now = new Date();
         const diffTime = now - date;
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays === 0) {
             // 今天
-            return date.toLocaleTimeString('zh-CN', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
+            return date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
             });
         } else if (diffDays === 1) {
             // 昨天
-            return '昨天 ' + date.toLocaleTimeString('zh-CN', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
+            return '昨天 ' + date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
             });
         } else if (diffDays < 7) {
             // 本周
             const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-            return weekdays[date.getDay()] + ' ' + date.toLocaleTimeString('zh-CN', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
+            return weekdays[date.getDay()] + ' ' + date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
             });
         } else {
             // 更早
-            return date.toLocaleDateString('zh-CN', { 
-                month: '2-digit', 
-                day: '2-digit' 
-            }) + ' ' + date.toLocaleTimeString('zh-CN', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
+            return date.toLocaleDateString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit'
+            }) + ' ' + date.toLocaleTimeString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
             });
         }
     }
-    
+
     /**
      * 渲染消息列表
      * @param {Array} messages - 消息数组
@@ -311,14 +311,14 @@ class MessageRenderer {
      */
     static renderMessageList(messages, options = {}) {
         const { showTimestamp = true, groupByDate = true } = options;
-        
+
         if (!messages || messages.length === 0) {
             return '<div class="no-messages">暂无消息</div>';
         }
-        
+
         let html = '';
         let lastDate = null;
-        
+
         messages.forEach((message, index) => {
             // 按日期分组
             if (groupByDate) {
@@ -328,13 +328,13 @@ class MessageRenderer {
                     html += `<div class="date-divider">${this.formatDate(message.timestamp)}</div>`;
                 }
             }
-            
+
             html += this.renderMessage(message, options);
         });
-        
+
         return html;
     }
-    
+
     /**
      * 格式化日期
      * @param {number} timestamp - 时间戳
@@ -345,7 +345,7 @@ class MessageRenderer {
         const now = new Date();
         const diffTime = now - date;
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays === 0) {
             return '今天';
         } else if (diffDays === 1) {
@@ -354,12 +354,41 @@ class MessageRenderer {
             const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
             return weekdays[date.getDay()];
         } else {
-            return date.toLocaleDateString('zh-CN', { 
+            return date.toLocaleDateString('zh-CN', {
                 year: 'numeric',
-                month: '2-digit', 
+                month: '2-digit',
                 day: '2-digit'
             });
         }
+    }
+
+    /**
+     * 确保URL是有效的
+     * @param {string} url - 原始URL
+     * @returns {string} 有效的URL
+     */
+    static ensureValidUrl(url) {
+        if (!url || typeof url !== 'string') {
+            return '';
+        }
+
+        // 如果已经是完整的URL，直接返回
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+
+        // 如果是相对路径，添加当前域名
+        if (url.startsWith('//')) {
+            return window.location.protocol + url;
+        }
+
+        // 如果是协议相对路径，添加https协议
+        if (url.startsWith('/')) {
+            return window.location.origin + url;
+        }
+
+        // 其他情况，假设是相对路径，添加当前域名
+        return window.location.origin + '/' + url;
     }
 }
 
