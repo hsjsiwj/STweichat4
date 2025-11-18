@@ -92,7 +92,7 @@ class MessageRenderer {
             <img src="${validUrl}" alt="表情包" class="sticker-image"
                  onload="this.classList.add('loaded')"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
-                 crossorigin="anonymous">
+                 referrerpolicy="no-referrer">
             <div class="sticker-fallback" style="display:none;">
                 <div class="sticker-error">表情包加载失败</div>
                 <div class="sticker-url">${this.escapeHtml(imageUrl)}</div>
@@ -115,7 +115,7 @@ class MessageRenderer {
                  onload="this.classList.add('loaded')"
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
                  onclick="window.open('${validUrl}', '_blank')"
-                 crossorigin="anonymous">
+                 referrerpolicy="no-referrer">
             <div class="image-fallback" style="display:none;">
                 <div class="image-error">图片加载失败</div>
                 <div class="image-url">${this.escapeHtml(imageUrl)}</div>
@@ -392,7 +392,7 @@ class MessageRenderer {
     }
 
     /**
-     * 处理图片URL，支持更多格式
+     * 处理图片URL，支持更多格式和错误处理
      * @param {string} url - 原始URL
      * @returns {string} 处理后的URL
      */
@@ -401,34 +401,67 @@ class MessageRenderer {
             return '';
         }
 
-        // 移除可能的查询参数和哈希
-        const cleanUrl = url.split('?')[0].split('#')[0];
+        try {
+            // 移除可能的查询参数和哈希
+            const cleanUrl = url.split('?')[0].split('#')[0];
 
-        // 如果是常见的图片托管网站，直接返回
-        const imageHosts = [
-            'i.postimg.cc',
-            'i.imgur.com',
-            'imgur.com',
-            'cdn.discordapp.com',
-            'media.discordapp.net',
-            'i.redd.it',
-            'preview.redd.it'
-        ];
+            // 扩展的图片托管白名单 - 参考mobile-main的实现
+            const imageHosts = [
+                'i.postimg.cc',
+                'i.imgur.com',
+                'imgur.com',
+                'cdn.discordapp.com',
+                'media.discordapp.net',
+                'i.redd.it',
+                'preview.redd.it',
+                'picsum.photos',
+                'source.unsplash.com',
+                'images.unsplash.com',
+                'cdn.pixabay.com',
+                'images.pexels.com',
+                'i.ibb.co',
+                'imgbox.com',
+                'postimg.cc'
+            ];
 
-        // 检查是否是已知的图片托管网站
-        for (const host of imageHosts) {
-            if (cleanUrl.includes(host)) {
-                // 确保URL是完整的
-                if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+            // 已是完整URL：验证URL格式并编码返回
+            if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+                try {
+                    new URL(cleanUrl); // 验证URL格式
+                    return encodeURI(cleanUrl);
+                } catch (e) {
+                    console.warn('无效的图片URL:', cleanUrl, e);
                     return cleanUrl;
-                } else {
-                    return 'https://' + cleanUrl;
                 }
             }
-        }
 
-        // 对于其他URL，使用标准处理
-        return this.ensureValidUrl(cleanUrl);
+            // 检查是否为白名单主机的URL
+            for (const host of imageHosts) {
+                if (cleanUrl.includes(host) || cleanUrl.startsWith(host)) {
+                    const withProto = cleanUrl.startsWith(host) ? `https://${cleanUrl}` : cleanUrl;
+                    try {
+                        new URL(withProto); // 验证URL格式
+                        return encodeURI(withProto);
+                    } catch (e) {
+                        console.warn('无效的白主机图片URL:', withProto, e);
+                        return withProto;
+                    }
+                }
+            }
+
+            // 其他情况，尝试添加https://前缀
+            const ensured = this.ensureValidUrl(cleanUrl);
+            try {
+                new URL(ensured); // 验证URL格式
+                return encodeURI(ensured);
+            } catch (e) {
+                console.warn('无法处理的图片URL:', ensured, e);
+                return ensured;
+            }
+        } catch (error) {
+            console.error('处理图片URL时发生错误:', url, error);
+            return url;
+        }
     }
 }
 

@@ -76,7 +76,7 @@ class WeChatPhone {
       /* ignore */
     }
 
-    // 启用拖拽（以标题栏为手柄），并自动校正越界位置，防止“半个界面超出视口且无法拖拽”
+    // 启用拖拽（以标题栏为手柄），并自动校正越界位置，防止"半个界面超出视口且无法拖拽"
     // 拖拽实例延后由 _setupOrUpdateDragHelper 按缩放状态决定是否启用
     this._drag = null;
 
@@ -136,7 +136,7 @@ class WeChatPhone {
     });
 
     // 固定显示方案：手机主界面不再可拖拽，始终完整显示在视口（等比缩放 + 居中）
-    // 悬浮“💬”图标仍可拖拽（在 index.js 中处理）
+    // 悬浮"💬"图标仍可拖拽（在 index.js 中处理）
     const BASE_W = 375;
     const BASE_H = 812;
 
@@ -233,7 +233,7 @@ class WeChatPhone {
       });
     }
 
-    // 顶部“＋”按钮（弹出菜单：发起群聊/添加朋友/扫一扫）
+    // 顶部"＋"按钮（弹出菜单：发起群聊/添加朋友/扫一扫）
     const addBtn = frame.querySelector('.wechat-header .add');
     if (addBtn) {
       addBtn.addEventListener('click', e => {
@@ -243,7 +243,7 @@ class WeChatPhone {
       });
     }
 
-    // 保留空位：顶部仅“搜索/＋”，不再提供导入按钮
+    // 保留空位：顶部仅"搜索/＋"，不再提供导入按钮
   }
 
   // 简易搜索面板（占位版）
@@ -291,7 +291,7 @@ class WeChatPhone {
     this.setTitle('搜索');
   }
 
-  // 顶部“＋”菜单（占位版）
+  // 顶部"＋"菜单（占位版）
   toggleAddMenu(evt) {
     const frame = document.getElementById('wechat-frame');
     let menu = frame.querySelector('#wechat-add-menu');
@@ -436,17 +436,17 @@ class WeChatPhone {
     const chats = computed;
 
     if (!chats.length) {
-      // 空态：突出“添加好友”的入口，同时提供“导入历史标签”
+      // 空态：突出"添加好友"的入口，同时提供"导入历史标签"
       content.innerHTML = `
         <div class="chat-empty" style="background:#fff;padding:20px;">
-          <div style="color:#999;margin-bottom:12px;">暂无会话。请点击“＋ → 添加朋友（输入ID）”，或在聊天中发送包含 [好友id|昵称|ID] 的消息来建立好友。</div>
+          <div style="color:#999;margin-bottom:12px;">暂无会话。请点击"＋ → 添加朋友（输入ID）"，或在聊天中发送包含 [好友id|昵称|ID] 的消息来建立好友。</div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button id="wechat_add_friend_btn" class="menu_button" style="background:#07C160;color:#fff;">➕ 添加好友（输入ID）</button>
           </div>
         </div>`;
       const addBtn = document.getElementById('wechat_add_friend_btn');
       addBtn?.addEventListener('click', () => {
-        // 复用“＋”菜单的添加逻辑
+        // 复用"＋"菜单的添加逻辑
         try {
           const fidRaw = prompt('请输入好友ID（数字或字母数字，不含空格）：', '');
           const fid = (fidRaw || '').trim();
@@ -599,7 +599,13 @@ class WeChatPhone {
                         <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                             ${m.imageUrl
-                              ? `<img src="${m.imageUrl}" style="max-width:100%;display:block;border-radius:6px;">`
+                              ? `<div class="message-image-container">
+                                  <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                                       onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+                                       onload="this.classList.add('loaded')"
+                                       referrerpolicy="no-referrer">
+                                  <div class="message-image-error" style="display:none;">[图片加载失败]</div>
+                                </div>`
                               : String(m.text || '')
                                 .replace(/</g, '<')
                                 .replace(/>/g, '>')
@@ -624,7 +630,7 @@ class WeChatPhone {
     const pushMyMsg = (text, targetId) => {
       const wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-      const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safe = String(text).replace(/</g, '<').replace(/>/g, '>');
       const idLine =
         targetId !== undefined && targetId !== null
           ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
@@ -791,7 +797,7 @@ class WeChatPhone {
         if (!gItems.length) {
           content.innerHTML = `
             <div class="contacts" style="background:#fff;">
-              <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角“＋ → 粘贴标签文本添加”。</div>
+              <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角"＋ → 粘贴标签文本添加"。</div>
             </div>`;
           return;
         }
@@ -809,7 +815,7 @@ class WeChatPhone {
         content.innerHTML = `
           <div class="contacts" style="background:#fff;">
             <div style="padding:12px 14px;background:#fff7e6;color:#ad6800;border-bottom:1px solid #eee;">
-              当前未选择角色，正在显示“全局好友（未绑定）”。请选择一个角色后可在右上角“＋”中进行粘贴或历史扫描，再绑定到该角色。
+              当前未选择角色，正在显示"全局好友（未绑定）"。请选择一个角色后可在右上角"＋"中进行粘贴或历史扫描，再绑定到该角色。
             </div>
             ${rows}
           </div>`;
@@ -844,7 +850,7 @@ class WeChatPhone {
       if (!items.length) {
         content.innerHTML = `
           <div class="contacts" style="background:#fff;">
-            <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角“＋ → 添加朋友”。</div>
+            <div style="padding:16px;color:#999;">暂无好友。请发送含有 [好友id|昵称|ID] 的文本，或点击右上角"＋ → 添加朋友"。</div>
           </div>`;
         return;
       }
@@ -1075,9 +1081,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
 /* === WeChat Extension: dynamic context binding patch ===
    - 将聊天页与 wechatContext 对接（若存在），否则回退演示数据
-   - 监听 wechat-context-updated 事件，自动刷新“微信”页（列表/详情）
+   - 监听 wechat-context-updated 事件，自动刷新"微信"页（列表/详情）
    - 不改动原有类定义，通过 prototype 覆写保障向后兼容
-*/
+ */
 (function () {
   if (typeof WeChatPhone === 'undefined' || !WeChatPhone.prototype) return;
   const P = WeChatPhone.prototype;
@@ -1117,8 +1123,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
                 ${c.unread ? `<span style="background:#f54d4d;color:#fff;border-radius:10px;padding:0 6px;font-size:12px;line-height:18px;min-width:18px;text-align:center;">${c.unread}</span>` : ''}
               </div>
             </div>
-          </div>
-        `,
+          `,
           )
           .join('')}
       </div>
@@ -1232,9 +1237,17 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
               m => `
             <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
               <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
-                ${String(m.text || '')
-                  .replace(/</g, '&lt;')
-                  .replace(/>/g, '&gt;')}
+                ${m.imageUrl
+                  ? `<div class="message-image-container">
+                      <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                           onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+                           onload="this.classList.add('loaded')"
+                           referrerpolicy="no-referrer">
+                      <div class="message-image-error" style="display:none;">[图片加载失败]</div>
+                    </div>`
+                  : String(m.text || '')
+                    .replace(/</g, '<')
+                    .replace(/>/g, '>')}
               </div>
             </div>
           `,
@@ -1252,7 +1265,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const send = document.getElementById('chat-send');
     const messages = content.querySelector('.messages');
 
-    // 根据设置推导“目标ID”（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
+    // 根据设置推导"目标ID"（支持 extensionSettings.wechat_simulator.idSource/customIdPath）
     function deriveTargetId(raw) {
       // 复合键 '<charKey>::<friendId>' 场景：优先提取 friendId 用于发送前缀
       if (typeof raw === 'string' && raw.includes('::')) {
@@ -1279,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     const pushMyMsg = (text, targetId) => {
       const wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-      const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safe = String(text).replace(/</g, '<').replace(/>/g, '>');
       const idLine =
         targetId !== undefined && targetId !== null
           ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
@@ -1368,7 +1381,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       // 本地立即回显（带目标 id）
       pushMyMsg(val, targetId);
 
-      // 发送到 SillyTavern（带“发送给id:xxx”前缀与空行）
+      // 发送到 SillyTavern（带"发送给id:xxx"前缀与空行）
       trySendToSillyTavern(val, chatId);
 
       input.value = '';
@@ -1384,7 +1397,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     this._currentChatName = chatName;
   };
 
-  // 刷新“微信”页（由 wechat-context-updated 驱动）
+  // 刷新"微信"页（由 wechat-context-updated 驱动）
   P._onWechatContextUpdated = function () {
     try {
       this._ensureState();
@@ -1461,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
    - 为聊天详情页提供头部返回按钮（返回到会话列表）
    - 状态栏时间每分钟自动刷新
    - 以原型增强的方式添加，无需侵入原类定义
-*/
+ */
 (function () {
   if (typeof WeChatPhone === 'undefined' || !WeChatPhone.prototype) return;
   const P = WeChatPhone.prototype;
@@ -1501,12 +1514,12 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       backEl.addEventListener('click', () => {
         // 仅在聊天详情内返回列表
         if (this.currentTab === 'chat' && this.currentView === 'detail') {
-          this.loadTabContent('chat'); // 切换回“微信”页（列表）
+          this.loadTabContent('chat'); // 切换回"微信"页（列表）
         }
       });
     }
 
-    // 显示条件：仅在“聊天详情”视图
+    // 显示条件：仅在"聊天详情"视图
     const showBack = this.currentTab === 'chat' && this.currentView === 'detail';
     backEl.style.display = showBack ? 'inline-block' : 'none';
   };
@@ -1543,8 +1556,8 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
 /* === WeChat Extension: dynamic override (safe after class ready) ===
    - 解决前置补丁在类定义前执行导致未生效的问题
-   - 等待 WeChatPhone 定义后，覆盖 renderChatList/renderChatDetail/loadTabContent 为“多会话聚合 + 动态绑定”版本
-*/
+   - 等待 WeChatPhone 定义后，覆盖 renderChatList/renderChatDetail/loadTabContent 为"多会话聚合 + 动态绑定"版本
+ */
 (function waitAndOverride() {
   function override() {
     if (typeof window.WeChatPhone === 'undefined' || !window.WeChatPhone.prototype) return false;
@@ -1588,8 +1601,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
                   ${c.unread ? `<span style="background:#f54d4d;color:#fff;border-radius:10px;padding:0 6px;font-size:12px;line-height:18px;min-width:18px;text-align:center;">${c.unread}</span>` : ''}
                 </div>
               </div>
-            </div>
-          `,
+            `,
             )
             .join('')}
         </div>
@@ -1602,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           const name = el.getAttribute('data-name') || '聊天';
           let switchedToChar = false;
 
-          // 若为“角色占位会话”，先尝试切换到对应角色并刷新上下文
+          // 若为"角色占位会话"，先尝试切换到对应角色并刷新上下文
           if (
             rawId &&
             rawId.startsWith('char:') &&
@@ -1628,7 +1640,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
 
           // 计算有效的 chatId：
           // - 对于复合键 'char:<cid>::<fid>'，必须保留原键以匹配本地消息存储
-          // - 仅当是“纯占位键”（如 'char:<cid>'）时，才替换为当前 ST 会话ID
+          // - 仅当是"纯占位键"（如 'char:<cid>'）时，才替换为当前 ST 会话ID
           const st = window.SillyTavern?.getContext?.();
           let effectiveId = rawId;
           try {
@@ -1756,9 +1768,17 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
                 m => `
               <div style="display:flex;${m.from === 'me' ? 'justify-content:flex-end;' : 'justify-content:flex-start;'}margin:8px 0;">
                 <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
-                  ${String(m.text || '')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')}
+                  ${m.imageUrl
+                    ? `<div class="message-image-container">
+                        <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                             onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
+                             onload="this.classList.add('loaded')"
+                             referrerpolicy="no-referrer">
+                        <div class="message-image-error" style="display:none;">[图片加载失败]</div>
+                      </div>`
+                    : String(m.text || '')
+                      .replace(/</g, '<')
+                      .replace(/>/g, '>')}
                 </div>
               </div>
             `,
@@ -1779,7 +1799,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const pushMyMsg = (text, targetId) => {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'display:flex;justify-content:flex-end;margin:8px 0;';
-        const safe = String(text).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const safe = String(text).replace(/</g, '<').replace(/>/g, '>');
         const idLine =
           targetId !== undefined && targetId !== null
             ? `<div style="color:#999;font-size:12px;margin:0 4px 2px 0;text-align:right;">id:${targetId}</div>`
@@ -1796,7 +1816,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         pushMyMsg(val, targetId);
         input.value = '';
 
-        // 发送到 SillyTavern（带“发送给id:xxx”前缀与空行）
+        // 发送到 SillyTavern（带"发送给id:xxx"前缀与空行）
         try {
           const st = window.SillyTavern?.getContext?.();
           const autoSend = st?.extensionSettings?.wechat_simulator?.autoSendToST;
@@ -1870,15 +1890,21 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           break;
         case 'contacts':
           this.setTitle('通讯录');
-          if (typeof this.renderContacts === 'function') this.renderContacts();
+          if (typeof this.renderContacts === 'function') {
+            this.renderContacts();
+          }
           break;
         case 'discover':
           this.setTitle('发现');
-          if (typeof this.renderDiscover === 'function') this.renderDiscover();
+          if (typeof this.renderDiscover === 'function') {
+            this.renderDiscover();
+          }
           break;
         case 'me':
           this.setTitle('我');
-          if (typeof this.renderMe === 'function') this.renderMe();
+          if (typeof this.renderMe === 'function') {
+            this.renderMe();
+          }
           break;
         default:
           if (typeof oldLoad === 'function') oldLoad.call(this, tab);
@@ -2158,9 +2184,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const store = getWeChatLocalStore();
       if (!store.friendsByChar) store.friendsByChar = {};
       if (!store.friendsByChar[cKey]) store.friendsByChar[cKey] = {};
-      // 兼容 ASCII 与全角分隔符/括号，并容忍大小写“好友id/好友ID”
+      // 兼容 ASCII 与全角分隔符/括号，并容忍大小写"好友id/好友ID"
       // 说明：无需对 [ 、| 、- 进行多余转义；仅对 ] 在字符类中转义
-      const re = /[[【](?:好友id|好友ID)\s*[|｜]\s*([^|\]】]+?)\s*[|｜]\s*([0-9A-Za-z_－-]+)\s*[\]】]/g;
+      const re = /[[【](?:好友id|好友ID)\s*[|｜]\s*([^|\]【]+?)\s*[|｜]\s*([0-9A-Za-z_－-]+)\s*[\]】]/g;
       const added = [];
       let m;
       while ((m = re.exec(text)) !== null) {
@@ -2275,14 +2301,14 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     return '会话';
   }
 
-  // 根据本地 lastByChatId 生成“会话列表”（仅当前角色环境），按时间倒序；不再注入任何演示/虚拟好友
+  // 根据本地 lastByChatId 生成"会话列表"（仅当前角色环境），按时间倒序；不再注入任何演示/虚拟好友
   function getComputedChatList() {
     try {
       const store = getWeChatLocalStore();
       const lastMap = store?.lastByChatId || {};
       const cKey = getCharKey();
       if (!cKey) {
-        // 未选择角色时，回退展示“全局空间”的会话列表（char:__global__）
+        // 未选择角色时，回退展示"全局空间"的会话列表（char:__global__）
         const gKey = 'char:__global__';
         const gEntries = Object.entries(lastMap).filter(([id]) => String(id).startsWith(`${gKey}::`));
         if (gEntries.length === 0) return [];
@@ -2485,7 +2511,7 @@ document.addEventListener('wechat-context-updated', (ev) => {
   try {
     let text = '';
     const msgs = ev && ev.detail && Array.isArray(ev.detail.messages) ? ev.detail.messages : null;
-    // Only capture the latest floor (last message)
+    // Only capture latest floor (last message)
     if (msgs && msgs.length) {
       const last = msgs[msgs.length - 1];
       text = String(last?.mes ?? last?.text ?? last?.content ?? last?.message ?? '').trim();

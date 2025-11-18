@@ -10,6 +10,7 @@ class ChatRecordManager {
         // 添加防重复缓存 - 改进的去重机制
         this.processedMessages = new Set();
         this.lastProcessedContent = '';
+        this.lastProcessedContentHash = ''; // 添加内容哈希缓存
         this.debounceTimer = null;
         this.isProcessing = false;
         this.processingTimeout = null;
@@ -146,7 +147,7 @@ class ChatRecordManager {
     }
 
     /**
-     * 处理DOM变化
+     * 处理DOM变化 - 优化版本，参考mobile-main实现
      * @param {MutationRecord[]} mutations - DOM变化记录
      */
     handleMutations(mutations) {
@@ -173,6 +174,7 @@ class ChatRecordManager {
         // 查找所有可能包含聊天记录的文本节点
         let foundNewContent = false;
         const textNodes = [];
+        const chatRecordPattern = /\[和[^\]]+的聊天\]/g;
 
         mutations.forEach((mutation) => {
             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
@@ -180,14 +182,14 @@ class ChatRecordManager {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         // 检查元素本身及其子元素是否包含聊天记录
                         const textContent = node.textContent || '';
-                        if (textContent.includes('[和') && textContent.includes('的聊天]')) {
+                        if (chatRecordPattern.test(textContent)) {
                             textNodes.push(node);
                             foundNewContent = true;
                         }
                     } else if (node.nodeType === Node.TEXT_NODE) {
                         // 检查文本节点是否包含聊天记录
                         const textContent = node.textContent || '';
-                        if (textContent.includes('[和') && textContent.includes('的聊天]')) {
+                        if (chatRecordPattern.test(textContent)) {
                             textNodes.push(node);
                             foundNewContent = true;
                         }
@@ -208,8 +210,11 @@ class ChatRecordManager {
         // 合并所有找到的文本内容
         const combinedContent = textNodes.map(node => node.textContent || '').join('\n');
 
-        // 检查是否与上次处理的内容相同（更严格的检查）
-        if (combinedContent === this.lastProcessedContent) {
+        // 生成内容哈希，用于更精确的去重
+        const contentHash = this.simpleHash(combinedContent);
+        
+        // 检查是否与上次处理的内容相同（使用哈希比较，更高效）
+        if (contentHash === this.lastProcessedContentHash) {
             // 清除超时定时器并返回
             if (this.processingTimeout) {
                 clearTimeout(this.processingTimeout);
@@ -237,6 +242,7 @@ class ChatRecordManager {
                 const filteredRecords = this.filterDuplicateRecords(records);
                 if (filteredRecords.length > 0) {
                     this.processChatRecords(filteredRecords);
+                    this.lastProcessedContentHash = contentHash;
                     this.lastProcessedContent = combinedContent;
                 }
             }
@@ -261,10 +267,13 @@ class ChatRecordManager {
         const filteredRecords = [];
 
         records.forEach(record => {
-            // 为每条记录创建唯一标识
-            const recordKey = `${record.friendId}_${record.friendName}_${record.messages.length}`;
+            // 以消息内容构建稳定签名（类型+内容）
+            const signature = Array.isArray(record.messages)
+                ? record.messages.map(m => `${m.type}|${m.content}`).join('||')
+                : '';
+            const recordKey = `${record.friendId}|${this.simpleHash(signature)}`;
 
-            // 检查是否已处理过此记录
+            // 检查是否已处理过此记录批次
             if (this.processedMessages.has(recordKey)) {
                 return;
             }
@@ -275,9 +284,9 @@ class ChatRecordManager {
         });
 
         // 限制缓存大小，避免内存泄漏
-        if (this.processedMessages.size > 100) {
+        if (this.processedMessages.size > 200) {
             const entries = Array.from(this.processedMessages);
-            this.processedMessages = new Set(entries.slice(-50)); // 保留最近50条
+            this.processedMessages = new Set(entries.slice(-100)); // 保留最近100条
         }
 
         return filteredRecords;
@@ -369,17 +378,24 @@ class ChatRecordManager {
         const messageContainer = document.querySelector('.chat-messages');
         if (!messageContainer) return;
 
-        // 保留现有的消息（如SillyTavern的消息）
-        const existingMessages = messageContainer.innerHTML;
-
         // 渲染聊天记录消息
         const chatRecordMessagesHtml = this.renderer.renderMessageList(friendRecord.messages, {
             showTimestamp: true,
             groupByDate: true
         });
 
-        // 合并现有消息和聊天记录
-        messageContainer.innerHTML = existingMessages + chatRecordMessagesHtml;
+        // 清理旧的聊天记录区（避免重复叠加）
+        const oldSection = messageContainer.querySelector(`[data-chat-record-for="${friendId}"]`);
+        if (oldSection) {
+            oldSection.remove();
+        }
+
+        // 创建并插入新的聊天记录区（专属容器，便于下次替换）
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chat-record-section';
+        wrapper.setAttribute('data-chat-record-for', friendId);
+        wrapper.innerHTML = chatRecordMessagesHtml;
+        messageContainer.appendChild(wrapper);
 
         // 处理图片加载事件
         this.setupImageLoadEvents(messageContainer);
@@ -396,17 +412,22 @@ class ChatRecordManager {
         // 为所有图片添加加载事件监听
         const images = container.querySelectorAll('.sticker-image, .message-image');
         images.forEach(img => {
-            // 如果图片已经加载完成，跳过
-            if (img.complete || img.classList.contains('loaded')) {
+            // 已标记loaded则跳过
+            if (img.classList.contains('loaded')) {
                 return;
             }
 
-            // 添加加载事件
-            img.addEventListener('load', () => {
+            // 如果图片已经加载完成，立即补上loaded类，避免透明度为0
+            if (img.complete) {
                 img.classList.add('loaded');
-            });
+            } else {
+                // 添加加载事件
+                img.addEventListener('load', () => {
+                    img.classList.add('loaded');
+                });
+            }
 
-            // 添加错误事件
+            // 添加错误事件（无论complete与否都挂一次）
             img.addEventListener('error', () => {
                 this.handleImageError(img);
             });
@@ -714,6 +735,25 @@ class ChatRecordManager {
     importChatRecords(jsonData) {
         if (!this.initialized) return false;
         return this.storage.importRecords(jsonData);
+    }
+
+    /**
+     * 简单字符串哈希（稳定去重键）
+     * @param {string} str
+     * @returns {string}
+     */
+    simpleHash(str) {
+        try {
+            let h = 0;
+            for (let i = 0; i < str.length; i++) {
+                h = ((h << 5) - h) + str.charCodeAt(i);
+                h |= 0;
+            }
+            // 无符号并压缩为36进制，缩短长度
+            return (h >>> 0).toString(36);
+        } catch {
+            return String(str || '').length.toString(36);
+        }
     }
 
     /**
