@@ -1,25 +1,14 @@
 {
   "name": "WeChat Simulator",
+  "display_name": "微信模拟器",
+  "loading_order": 100,
   "version": "1.2.0",
   "description": "模拟微信界面，基础UI + 简易交互，占位模块可选加载 + 路径探测 + 降级容错",
   "author": "hsjsiwj",
   "license": "MIT",
   "homepage": "https://github.com/hsjsiwj/STweichat4",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/hsjsiwj/STweichat4.git"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "dependencies": {},
-  "devDependencies": {},
-  "keywords": [
-    "sillytavern",
-    "extension",
-    "wechat",
-    "simulator"
-  ],
+  "js": ["index.js"],
+  "css": ["styles/wechat-phone-fixed.css", "styles/drag-helper.css"],
   "sillytavern": {
     "type": "extension",
     "display_name": "微信模拟器",

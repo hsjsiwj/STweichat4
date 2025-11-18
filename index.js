@@ -13,6 +13,8 @@ let extensionBasePath = '';
 async function resolveBasePath() {
   const scripts = Array.from(document.getElementsByTagName('script'));
   const preferredDirs = [
+    '/scripts/extensions/third-party/wechat-extension',
+    '/scripts/extensions/third-party/wechat-extension/dist',
     '/scripts/extensions/third-party/STweichat4',
     '/scripts/extensions/third-party/STweichat4/dist',
     // 移除可能导致混淆的路径
@@ -59,7 +61,8 @@ async function resolveBasePath() {
     if (await isGood(abs)) return abs;
     /* eslint-enable no-await-in-loop */
   }
-  return '/scripts/extensions/third-party/STweichat4';
+  // 最终兜底：保持为本扩展的标准目录名，避免误指向其它扩展
+  return '/scripts/extensions/third-party/wechat-extension';
 }
 extensionBasePath = await resolveBasePath();
 window.wechatExtensionPath = extensionBasePath;
