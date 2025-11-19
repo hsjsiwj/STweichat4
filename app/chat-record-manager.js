@@ -242,8 +242,12 @@ class ChatRecordManager {
                 const filteredRecords = this.filterDuplicateRecords(records);
                 if (filteredRecords.length > 0) {
                     this.processChatRecords(filteredRecords);
+                    // 只有在确实处理了新记录时才更新哈希
                     this.lastProcessedContentHash = contentHash;
                     this.lastProcessedContent = combinedContent;
+                    console.log(`[ChatRecordManager] 处理了 ${filteredRecords.length} 条新记录，更新内容哈希`);
+                } else {
+                    console.log(`[ChatRecordManager] 检测到 ${records.length} 条记录，但都已存在，跳过处理`);
                 }
             }
         } catch (error) {
@@ -781,6 +785,16 @@ function initChatRecordManager() {
         if (!window.chatRecordManager) {
             window.chatRecordManager = new ChatRecordManager();
             console.log('[ChatRecordManager] 全局实例已创建');
+            
+            // 暴露防抖函数供调试使用
+            window.chatRecordManager.debouncedProcessChatRecords = function(content, delay = 300) {
+                if (this.debounceTimer) {
+                    clearTimeout(this.debounceTimer);
+                }
+                this.debounceTimer = setTimeout(() => {
+                    this.processChatRecords(content);
+                }, delay);
+            }.bind(window.chatRecordManager);
         }
     } catch (error) {
         console.error('[ChatRecordManager] 创建实例失败:', error);
