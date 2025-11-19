@@ -1,3 +1,4 @@
+
 // WeChat Phone Simulator - 模拟微信主界面和拖拽
 
 class WeChatPhone {
@@ -20,6 +21,63 @@ class WeChatPhone {
     const ts = Date.now();
     cssLink.href = `${window.wechatExtensionPath}/styles/wechat-phone-fixed.css?v=${ts}`;
     document.head.appendChild(cssLink);
+
+    // 添加内联样式确保输入框可正常交互
+    const style = document.createElement('style');
+    style.textContent = `
+      /* 聊天输入框样式 - 确保可正常交互 */
+      .input-bar {
+        position: relative !important;
+        z-index: 1000 !important;
+        background: #fff !important;
+        border-top: 1px solid #eee !important;
+        padding: 8px 10px !important;
+        display: flex !important;
+        gap: 8px !important;
+        align-items: center !important;
+      }
+
+      .input-bar input {
+        position: relative !important;
+        z-index: 1001 !important;
+        flex: 1 !important;
+        height: 36px !important;
+        border: 1px solid #e5e5e5 !important;
+        border-radius: 6px !important;
+        padding: 0 10px !important;
+        outline: none !important;
+        background: #fff !important;
+        color: #333 !important;
+        font-size: 14px !important;
+        pointer-events: auto !important;
+        user-select: text !important;
+      }
+
+      .input-bar button {
+        position: relative !important;
+        z-index: 1001 !important;
+        height: 36px !important;
+        padding: 0 14px !important;
+        background: #07C160 !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 6px !important;
+        cursor: pointer !important;
+        font-size: 14px !important;
+        pointer-events: auto !important;
+      }
+
+      /* 确保消息区域不被输入框遮挡 */
+      .chat-detail .messages {
+        padding-bottom: 70px !important;
+      }
+
+      /* 移除任何可能干扰输入的悬浮元素 */
+      .wechat-float-add-btn {
+        display: none !important;
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   createFrame() {
@@ -189,25 +247,7 @@ class WeChatPhone {
 
   bindNavEvents() {
     const frame = document.getElementById('wechat-frame');
-    // 底部悬浮＋号（快捷添加入口）
-    let fab = frame.querySelector('#wechat-fab-plus');
-    if (!fab) {
-      fab = document.createElement('div');
-      fab.id = 'wechat-fab-plus';
-      fab.title = '添加';
-      fab.style.cssText = `
-        position:absolute;right:14px;bottom:64px;width:42px;height:42px;border-radius:50%;
-        background:#07C160;color:#fff;display:flex;align-items:center;justify-content:center;
-        box-shadow:0 6px 18px rgba(7,193,96,0.35);cursor:pointer;font-size:22px;z-index:3;
-      `;
-      fab.textContent = '＋';
-      frame.appendChild(fab);
-      fab.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof this.toggleAddMenu === 'function') this.toggleAddMenu(e);
-      });
-    }
-    // 注释：上面的代码块是重复的，已经删除
+    // 注释：移除底部悬浮加号，避免与聊天界面输入框冲突
 
     const navItems = frame.querySelectorAll('.wechat-nav-item');
     navItems.forEach(item => {
@@ -600,7 +640,7 @@ class WeChatPhone {
                           <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                             ${m.imageUrl
                               ? `<div class="message-image-container">
-                                  <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                                  <img src="${m.imageUrl}" alt="图片" class="message-image"
                                        onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
                                        onload="this.classList.add('loaded')"
                                        referrerpolicy="no-referrer">
@@ -616,9 +656,9 @@ class WeChatPhone {
                       )
                       .join('')}
                 </div>
-                <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
-                    <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
-                    <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;">发送</button>
+                <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;z-index:100;">
+                    <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;z-index:101;">
+                    <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;z-index:101;">发送</button>
                 </div>
             </div>
         `;
@@ -764,7 +804,7 @@ class WeChatPhone {
         if (friendId) {
           // 设置当前好友ID
           window.chatRecordManager.currentFriendId = friendId;
-          
+
           // 显示好友聊天记录
           setTimeout(() => {
             window.chatRecordManager.displayFriendMessages(friendId);
@@ -947,7 +987,7 @@ class WeChatPhone {
                                <div style="margin-top:8px;color:#222;line-height:20px;">今天的风真大，学习也要加油呀～</div>
                                <div style="margin-top:8px;color:#999;font-size:12px;">2分钟前</div>
                              </div>
-                          `,
+                           `,
                             )
                             .join('')}
                         </div>
@@ -1030,19 +1070,19 @@ class WeChatPhone {
   // 辅助函数：从聊天ID中提取好友ID
   extractFriendIdFromChatId(chatId) {
     if (!chatId) return null;
-    
+
     // 从复合键中提取好友ID
     if (typeof chatId === 'string' && chatId.includes('::')) {
       const parts = chatId.split('::');
       return parts[parts.length - 1];
     }
-    
+
     // 从角色键中提取
     if (typeof chatId === 'string' && chatId.startsWith('char:')) {
       const parts = chatId.split(':');
       return parts[parts.length - 1];
     }
-    
+
     return chatId;
   }
 
@@ -1239,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
               <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                 ${m.imageUrl
                   ? `<div class="message-image-container">
-                      <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                      <img src="${m.imageUrl}" alt="图片" class="message-image"
                            onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
                            onload="this.classList.add('loaded')"
                            referrerpolicy="no-referrer">
@@ -1254,9 +1294,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
             )
             .join('')}
         </div>
-        <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
-          <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
-          <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;">发送</button>
+        <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;z-index:100;">
+          <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;z-index:101;">
+          <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;z-index:101;">发送</button>
         </div>
       </div>
     `;
@@ -1652,46 +1692,54 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           } catch (_) {
             /* 忽略 */
           }
+        }
 
-          // 优先直接从 ST API 拉取当前会话历史，失败再回退到 wechatContext 缓存
-          async function fetchStMessages() {
-            try {
-              const arr = await st?.getCurrentChatMessages?.();
-              if (!Array.isArray(arr) || arr.length === 0) return [];
-              // 轻量标准化
-              return arr
-                .map(m => {
-                  const isUser =
-                    m?.is_user === true ||
-                    m?.isUser === true ||
-                    m?.role === 'user' ||
-                    m?.name === 'You' ||
-                    m?.user === true ||
-                    m?.author === 'user';
-                  const text = String(m?.mes ?? m?.text ?? m?.content ?? m?.message ?? '').trim();
-                  return { from: isUser ? 'me' : 'other', text };
-                })
-                .filter(x => x.text !== '');
-            } catch (e) {
-              return [];
+        // 优先直接从 ST API 拉取当前会话历史，失败再回退到 wechatContext 缓存
+        (async () => {
+          try {
+            const arr = await st?.getCurrentChatMessages?.();
+            if (!Array.isArray(arr) || arr.length === 0) {
+              // 读取最新上下文的消息映射
+              try {
+                const ctx2 = window.wechatContext;
+                if (ctx2 && ctx2.ready && ctx2.messagesByChatId) {
+                  const msgs = ctx2.messagesByChatId[effectiveId] || ctx2.messagesByChatId[rawId] || [];
+                  this.renderChatDetail({ id: effectiveId, name }, msgs);
+                }
+              } catch (_) {
+                /* 忽略 */
+              }
+              return;
             }
-          }
+            // 轻量标准化
+            const msgs = arr
+              .map(m => {
+                const isUser =
+                  m?.is_user === true ||
+                  m?.isUser === true ||
+                  m?.role === 'user' ||
+                  m?.name === 'You' ||
+                  m?.user === true ||
+                  m?.author === 'user';
+                const text = String(m?.mes ?? m?.text ?? m?.content ?? m?.message ?? '').trim();
+                return { from: isUser ? 'me' : 'other', text };
+              })
+              .filter(x => x.text !== '');
 
-          let msgs = await fetchStMessages();
-
-          if (!msgs.length) {
+            this.renderChatDetail({ id: effectiveId, name }, msgs);
+          } catch (e) {
             // 读取最新上下文的消息映射
             try {
               const ctx2 = window.wechatContext;
               if (ctx2 && ctx2.ready && ctx2.messagesByChatId) {
-                msgs = ctx2.messagesByChatId[effectiveId] || ctx2.messagesByChatId[rawId] || [];
+                const msgs = ctx2.messagesByChatId[effectiveId] || ctx2.messagesByChatId[rawId] || [];
+                this.renderChatDetail({ id: effectiveId, name }, msgs);
               }
             } catch (_) {
               /* 忽略 */
             }
           }
-
-          this.renderChatDetail({ id: effectiveId, name }, msgs);
+        })();
         });
       });
 
@@ -1770,7 +1818,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
                 <div style="max-width:70%;padding:8px 10px;border-radius:8px;background:${m.from === 'me' ? '#95ec69' : '#fff'};box-shadow:0 1px 2px rgba(0,0,0,0.06);font-size:14px;line-height:20px;color:#111;">
                   ${m.imageUrl
                     ? `<div class="message-image-container">
-                        <img src="${m.imageUrl}" alt="图片" class="message-image" 
+                        <img src="${m.imageUrl}" alt="图片" class="message-image"
                              onerror="this.style.display='none';this.nextElementSibling.style.display='block';"
                              onload="this.classList.add('loaded')"
                              referrerpolicy="no-referrer">
@@ -1785,9 +1833,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
               )
               .join('')}
           </div>
-          <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;">
-            <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;">
-            <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;">发送</button>
+          <div class="input-bar" style="position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#fff;border-top:1px solid #eee;z-index:100;">
+            <input id="chat-input" type="text" placeholder="发消息..." style="flex:1;height:36px;border:1px solid #e5e5e5;border-radius:6px;padding:0 10px;outline:none;z-index:101;">
+            <button id="chat-send" class="send-btn" style="height:36px;padding:0 14px;background:#07C160;color:#fff;border:none;border-radius:6px;cursor:pointer;z-index:101;">发送</button>
           </div>
         </div>
       `;
@@ -2160,7 +2208,6 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           if (headTime) headTime.textContent = formatTimeShort(last.ts);
           // last summary (font-size:13px section)
           const sub = el.querySelector('div[style*="font-size:13px"]');
-          if (sub) sub.textContent = last.text;
         }
       });
     } catch (e) {
@@ -2200,7 +2247,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
           createdAt: store.friendsByChar[cKey][fid]?.createdAt || Date.now(),
         };
         added.push({ id: fid, name: store.friendsByChar[cKey][fid].name });
- 
+
         // 初始化 last 摘要（若无）
         const comp = `${cKey}::${fid}`;
         if (!store.lastByChatId[comp]) {
@@ -2224,6 +2271,21 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       const header = /\[和(.+?)的聊天\]/;
       if (!header.test(text)) return { added: 0, friendId: '' };
 
+      // 去重检查：生成内容的哈希值
+      const contentHash = simpleHash(text);
+      const now = Date.now();
+
+      // 检查是否在短时间内处理过相同内容
+      if (window.wechatLocalStore._lastProcessedHash === contentHash &&
+          now - window.wechatLocalStore._lastProcessedTime < 2000) {
+        console.log('[WeChat LocalStore] 检测到重复内容，跳过处理');
+        return { added: 0, friendId: '', duplicate: true };
+      }
+
+      // 更新最后处理记录
+      window.wechatLocalStore._lastProcessedHash = contentHash;
+      window.wechatLocalStore._lastProcessedTime = now;
+
       const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
       const cKey = getCharKey() || 'char:__global__';
       const store = getWeChatLocalStore();
@@ -2233,6 +2295,9 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
       let friendId = '';
       let added = 0;
       const msgRe = /^\[(对方消息|我方消息)\|([^|]+)\|([^|]+)\|([^|]+)\|([^\]]+)\]$/;
+
+      // 收集所有要添加的消息，进行批量去重检查
+      const messagesToAdd = [];
 
       for (const line of lines) {
         const m = msgRe.exec(line);
@@ -2251,28 +2316,66 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
         const from = side === '我方消息' ? 'me' : 'other';
         const ts = Date.now() + added;
 
+        let messageData;
         if (/^(表情包|图片)$/i.test(typ)) {
-          store.messagesByChatId[compKey].push({ from, imageUrl: payload, ts, type: 'image' });
-          store.lastByChatId[compKey] = { text: '[图片]', ts };
+          messageData = { from, imageUrl: payload, ts, type: 'image', hash: simpleHash(`${from}|${payload}|${typ}`) };
         } else if (/^红包$/i.test(typ)) {
           const textShow = `红包: ${payload}`;
-          store.messagesByChatId[compKey].push({ from, text: textShow, ts, type: 'red_packet' });
-          store.lastByChatId[compKey] = { text: textShow, ts };
+          messageData = { from, text: textShow, ts, type: 'red_packet', hash: simpleHash(`${from}|${textShow}|${typ}`) };
         } else {
-          store.messagesByChatId[compKey].push({ from, text: payload, ts, type: 'text' });
-          store.lastByChatId[compKey] = { text: payload, ts };
+          messageData = { from, text: payload, ts, type: 'text', hash: simpleHash(`${from}|${payload}|${typ}`) };
         }
-        added += 1;
+
+        messagesToAdd.push({ compKey, messageData });
       }
 
-      saveWeChatLocalStore(store);
-      try { console.log('[WeChat LocalStore] 结构化聊天块解析完成:', { added, friendId, cKey }); } catch (e) { /* noop */ }
-      return { added, friendId };
+      // 批量去重检查
+      for (const { compKey, messageData } of messagesToAdd) {
+        // 检查最近的消息是否已存在相同内容
+        const recentMessages = store.messagesByChatId[compKey] || [];
+        const recentHashes = recentMessages.slice(-5).map(msg => msg.hash);
+
+        if (!recentHashes.includes(messageData.hash)) {
+          // 添加新消息
+          if (!store.messagesByChatId[compKey]) store.messagesByChatId[compKey] = [];
+          store.messagesByChatId[compKey].push(messageData);
+
+          // 更新最后消息摘要
+          if (messageData.imageUrl) {
+            store.lastByChatId[compKey] = { text: '[图片]', ts: messageData.ts };
+          } else {
+            store.lastByChatId[compKey] = { text: messageData.text, ts: messageData.ts };
+          }
+
+          added += 1;
+        }
+      }
+
+      if (added > 0) {
+        saveWeChatLocalStore(store);
+        console.log('[WeChat LocalStore] 结构化聊天块解析完成:', { added, friendId, cKey });
+      } else {
+        console.log('[WeChat LocalStore] 所有消息均已存在，跳过保存');
+      }
+
+      return { added, friendId, duplicate: added === 0 };
     } catch (_) {
       return { added: 0, friendId: '' };
     }
   }
- 
+
+  // 简单哈希函数
+  function simpleHash(str) {
+    let hash = 0;
+    if (str.length === 0) return hash;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转换为32位整数
+    }
+    return hash.toString(36);
+  }
+
   // 计算列表展示用名称
   function getNameForKey(id) {
     try {
@@ -2503,6 +2606,7 @@ document.addEventListener('DOMContentLoaded', initWeChatPhone);
     }
   } catch (e) {
     /* ignore */
+    }
   }
 })();
 

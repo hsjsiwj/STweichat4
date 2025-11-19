@@ -266,3 +266,52 @@
   text-align: center;
   font-size: 18px;
 }
+
+/* 聊天输入框样式 - 确保可正常交互 */
+.input-bar {
+  position: relative !important;
+  z-index: 1000 !important;
+  background: #fff !important;
+  border-top: 1px solid #eee !important;
+  padding: 8px 10px !important;
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.input-bar input {
+  position: relative !important;
+  z-index: 1001 !important;
+  flex: 1 !important;
+  height: 36px !important;
+  border: 1px solid #e5e5e5 !important;
+  border-radius: 6px !important;
+  padding: 0 10px !important;
+  outline: none !important;
+  background: #fff !important;
+  color: #333 !important;
+  font-size: 14px !important;
+}
+
+.input-bar button {
+  position: relative !important;
+  z-index: 1001 !important;
+  height: 36px !important;
+  padding: 0 14px !important;
+  background: #07C160 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+}
+
+/* 确保消息区域不被输入框遮挡 */
+.chat-detail .messages {
+  padding-bottom: 70px !important;
+}
+
+/* 移除任何可能干扰输入的悬浮元素 */
+.wechat-float-add-btn {
+  display: none !important;
+}
