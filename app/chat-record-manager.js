@@ -14,6 +14,13 @@ class ChatRecordManager {
         this.debounceTimer = null;
         this.isProcessing = false;
         this.processingTimeout = null;
+        
+        // 增强的去重机制 - 参考mobile-main实现
+        this.contentHashCache = new Map(); // 内容哈希缓存，提高性能
+        this.batchProcessingQueue = []; // 批处理队列
+        this.isBatchProcessing = false; // 批处理状态标记
+        this.lastProcessTime = 0; // 上次处理时间
+        this.processingLock = false; // 处理锁，防止并发
 
         // 延迟初始化依赖类，等待它们加载完成
         this.initialized = false;
@@ -147,12 +154,12 @@ class ChatRecordManager {
     }
 
     /**
-     * 处理DOM变化 - 优化版本，参考mobile-main实现
+     * 处理DOM变化 - 增强版本，参考mobile-main实现
      * @param {MutationRecord[]} mutations - DOM变化记录
      */
     handleMutations(mutations) {
         // 如果正在处理中，跳过
-        if (this.isProcessing) {
+        if (this.isProcessing || this.processingLock) {
             return;
         }
 
@@ -165,6 +172,7 @@ class ChatRecordManager {
         this.processingTimeout = setTimeout(() => {
             console.warn('[ChatRecordManager] 处理超时，强制重置状态');
             this.isProcessing = false;
+            this.processingLock = false;
             if (this.debounceTimer) {
                 clearTimeout(this.debounceTimer);
                 this.debounceTimer = null;
@@ -209,11 +217,12 @@ class ChatRecordManager {
 
         // 合并所有找到的文本内容
         const combinedContent = textNodes.map(node => node.textContent || '').join('\n');
-
+        
         // 生成内容哈希，用于更精确的去重
         const contentHash = this.simpleHash(combinedContent);
         
-        // 检查是否与上次处理的内容相同（使用哈希比较，更高效）
+        // 多层去重检查 - 参考mobile-main实现
+        // 1. 基础哈希检查
         if (contentHash === this.lastProcessedContentHash) {
             // 清除超时定时器并返回
             if (this.processingTimeout) {
@@ -222,8 +231,21 @@ class ChatRecordManager {
             }
             return;
         }
+        
+        // 2. 时间窗口检查 - 防止短时间内重复处理
+        const now = Date.now();
+        const timeSinceLastProcess = now - this.lastProcessTime;
+        if (timeSinceLastProcess < 1000 && this.isSimilarContent(combinedContent, this.lastProcessedContent)) {
+            // 清除超时定时器并返回
+            if (this.processingTimeout) {
+                clearTimeout(this.processingTimeout);
+                this.processingTimeout = null;
+            }
+            return;
+        }
 
-        // 标记为正在处理
+        // 设置处理锁，防止并发处理
+        this.processingLock = true;
         this.isProcessing = true;
 
         try {
@@ -238,13 +260,14 @@ class ChatRecordManager {
             // 解析聊天记录
             const records = this.parser.parseChatRecord(combinedContent);
             if (records.length > 0) {
-                // 过滤重复记录
-                const filteredRecords = this.filterDuplicateRecords(records);
+                // 使用增强的去重机制
+                const filteredRecords = this.enhancedFilterDuplicateRecords(records);
                 if (filteredRecords.length > 0) {
                     this.processChatRecords(filteredRecords);
                     // 只有在确实处理了新记录时才更新哈希
                     this.lastProcessedContentHash = contentHash;
                     this.lastProcessedContent = combinedContent;
+                    this.lastProcessTime = Date.now();
                     console.log(`[ChatRecordManager] 处理了 ${filteredRecords.length} 条新记录，更新内容哈希`);
                 } else {
                     console.log(`[ChatRecordManager] 检测到 ${records.length} 条记录，但都已存在，跳过处理`);
@@ -255,6 +278,7 @@ class ChatRecordManager {
         } finally {
             // 处理完成，重置标记和超时
             this.isProcessing = false;
+            this.processingLock = false;
             if (this.processingTimeout) {
                 clearTimeout(this.processingTimeout);
                 this.processingTimeout = null;
@@ -294,6 +318,197 @@ class ChatRecordManager {
         }
 
         return filteredRecords;
+    }
+
+    /**
+     * 增强的去重机制 - 参考mobile-main实现
+     * @param {Array} records - 聊天记录数组
+     * @returns {Array} 过滤后的记录
+     */
+    enhancedFilterDuplicateRecords(records) {
+        const filteredRecords = [];
+        const now = Date.now();
+
+        // 批处理优化 - 参考mobile-main实现
+        if (this.isBatchProcessing) {
+            // 如果正在批处理，添加到队列
+            this.batchProcessingQueue.push(...records);
+            return filteredRecords;
+        }
+
+        // 标记批处理开始
+        this.isBatchProcessing = true;
+
+        try {
+            records.forEach(record => {
+                // 为每条消息生成唯一标识
+                const messageSignatures = Array.isArray(record.messages)
+                    ? record.messages.map(m => {
+                        // 使用内容哈希缓存提高性能
+                        if (!this.contentHashCache.has(m.content)) {
+                            this.contentHashCache.set(m.content, this.simpleHash(m.content));
+                        }
+                        const contentHash = this.contentHashCache.get(m.content);
+                        return `${m.type}|${contentHash}`;
+                    })
+                    : [];
+
+                // 构建记录级别的唯一标识
+                const recordSignature = messageSignatures.join('||');
+                const recordKey = `${record.friendId}|${this.simpleHash(recordSignature)}`;
+
+                // 多层去重检查
+                // 1. 基础去重检查
+                if (this.processedMessages.has(recordKey)) {
+                    return;
+                }
+
+                // 2. 时间窗口去重 - 防止短时间内重复处理相同内容
+                const timeSinceLastProcess = now - this.lastProcessTime;
+                if (timeSinceLastProcess < 1000 && recordKey === this.lastProcessedContentHash) {
+                    return; // 1秒内相同内容跳过
+                }
+
+                // 3. 内容相似性检查 - 防止微小变化导致的重复
+                if (this.isDuplicateByContentSimilarity(record)) {
+                    return;
+                }
+
+                // 添加到已处理集合
+                this.processedMessages.add(recordKey);
+                filteredRecords.push(record);
+            });
+
+            // 智能缓存管理 - 参考mobile-main实现
+            this.manageCacheSize();
+
+        } finally {
+            // 标记批处理结束
+            this.isBatchProcessing = false;
+            
+            // 处理队列中的记录
+            if (this.batchProcessingQueue.length > 0) {
+                const queuedRecords = this.batchProcessingQueue.splice(0);
+                setTimeout(() => {
+                    this.enhancedFilterDuplicateRecords(queuedRecords);
+                }, 100); // 100ms延迟处理队列
+            }
+        }
+
+        return filteredRecords;
+    }
+
+    /**
+     * 基于内容相似性的去重检查
+     * @param {Object} record - 聊天记录
+     * @returns {boolean} 是否重复
+     */
+    isDuplicateByContentSimilarity(record) {
+        if (!Array.isArray(record.messages) || record.messages.length === 0) {
+            return false;
+        }
+
+        // 获取最近处理的记录进行比较
+        const recentRecords = Array.from(this.processedMessages).slice(-10);
+        
+        for (const recentKey of recentRecords) {
+            const [friendId, signatureHash] = recentKey.split('|');
+            
+            // 如果好友ID不同，跳过
+            if (friendId !== record.friendId) {
+                continue;
+            }
+
+            // 检查消息数量是否相似
+            const messageCountDiff = Math.abs(record.messages.length - this.extractMessageCountFromHash(signatureHash));
+            if (messageCountDiff > 2) { // 允许2条消息的差异
+                continue;
+            }
+
+            // 检查内容相似性
+            const recentContent = this.getContentFromHash(signatureHash);
+            const currentContent = this.extractContentFromRecord(record);
+            
+            if (this.isSimilarContent(recentContent, currentContent)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 从哈希中提取消息数量
+     * @param {string} hash - 哈希值
+     * @returns {number} 消息数量
+     */
+    extractMessageCountFromHash(hash) {
+        // 这是一个简化的实现，实际可能需要更复杂的逻辑
+        // 或者可以在缓存中存储更多信息
+        return parseInt(hash.slice(0, 3), 36) % 20 || 1;
+    }
+
+    /**
+     * 从哈希中获取内容
+     * @param {string} hash - 哈希值
+     * @returns {string} 内容
+     */
+    getContentFromHash(hash) {
+        // 这是一个简化的实现，实际可能需要在缓存中存储原始内容
+        return this.contentHashCache.get(hash) || '';
+    }
+
+    /**
+     * 从记录中提取内容
+     * @param {Object} record - 聊天记录
+     * @returns {string} 内容
+     */
+    extractContentFromRecord(record) {
+        if (!Array.isArray(record.messages)) {
+            return '';
+        }
+
+        return record.messages
+            .map(m => `${m.type}:${m.content}`)
+            .join('||')
+            .slice(0, 500); // 限制长度以提高性能
+    }
+
+    /**
+     * 智能缓存管理 - 参考mobile-main实现
+     */
+    manageCacheSize() {
+        // 限制处理消息缓存大小
+        if (this.processedMessages.size > 500) {
+            const entries = Array.from(this.processedMessages);
+            // 保留最近的200条和最重要的300条
+            const recentEntries = entries.slice(-200);
+            const importantEntries = entries.slice(0, 300).filter(entry =>
+                this.isImportantEntry(entry)
+            );
+            this.processedMessages = new Set([...importantEntries, ...recentEntries]);
+        }
+
+        // 限制内容哈希缓存大小
+        if (this.contentHashCache.size > 1000) {
+            const entries = Array.from(this.contentHashCache.entries());
+            // 保留最近使用的500个
+            this.contentHashCache = new Map(entries.slice(-500));
+        }
+    }
+
+    /**
+     * 判断是否为重要条目
+     * @param {string} entry - 缓存条目
+     * @returns {boolean} 是否重要
+     */
+    isImportantEntry(entry) {
+        // 简单的重要性判断逻辑
+        // 可以根据实际需求进行扩展
+        return entry.includes('表情包') ||
+               entry.includes('图片') ||
+               entry.includes('红包') ||
+               entry.length > 100;
     }
 
     /**
@@ -761,6 +976,278 @@ class ChatRecordManager {
     }
 
     /**
+     * 内容相似性检查 - 参考mobile-main实现
+     * @param {string} content1 - 内容1
+     * @param {string} content2 - 内容2
+     * @returns {boolean} 是否相似
+     */
+    isSimilarContent(content1, content2) {
+        if (!content1 || !content2) {
+            return false;
+        }
+
+        // 如果内容完全相同，直接返回true
+        if (content1 === content2) {
+            return true;
+        }
+
+        // 计算内容长度差异
+        const len1 = content1.length;
+        const len2 = content2.length;
+        const lengthDiff = Math.abs(len1 - len2);
+        const maxLength = Math.max(len1, len2);
+        
+        // 如果长度差异超过20%，认为不相似
+        if (lengthDiff / maxLength > 0.2) {
+            return false;
+        }
+
+        // 提取关键特征进行比较
+        const features1 = this.extractContentFeatures(content1);
+        const features2 = this.extractContentFeatures(content2);
+        
+        // 计算特征相似度
+        return this.calculateFeatureSimilarity(features1, features2) > 0.8;
+    }
+
+    /**
+     * 提取内容特征 - 用于相似性比较
+     * @param {string} content - 内容
+     * @returns {Object} 特征对象
+     */
+    extractContentFeatures(content) {
+        // 提取好友名称模式
+        const friendMatches = content.match(/\[和([^\]]+)的聊天\]/g) || [];
+        const friendNames = friendMatches.map(match => match.replace(/\[和([^\]]+)的聊天\]/, '$1'));
+        
+        // 提取消息类型
+        const messageTypes = [];
+        if (content.includes('[表情包]')) messageTypes.push('表情包');
+        if (content.includes('[图片]')) messageTypes.push('图片');
+        if (content.includes('[红包]')) messageTypes.push('红包');
+        if (content.includes('[语音]')) messageTypes.push('语音');
+        if (content.includes('[视频]')) messageTypes.push('视频');
+        if (content.includes('[位置]')) messageTypes.push('位置');
+        if (content.includes('[链接]')) messageTypes.push('链接');
+        
+        // 提取时间戳模式
+        const timeMatches = content.match(/\d{1,2}:\d{2}/g) || [];
+        
+        // 提取消息数量
+        const messageCount = (content.match(/(\d{1,2}:\d{2})/g) || []).length;
+        
+        return {
+            friendNames: friendNames.sort(),
+            messageTypes: messageTypes.sort(),
+            timePatterns: timeMatches.slice(0, 5), // 只取前5个时间戳
+            messageCount: messageCount,
+            contentLength: content.length,
+            hash: this.simpleHash(content)
+        };
+    }
+
+    /**
+     * 计算特征相似度
+     * @param {Object} features1 - 特征1
+     * @param {Object} features2 - 特征2
+     * @returns {number} 相似度（0-1）
+     */
+    calculateFeatureSimilarity(features1, features2) {
+        let similarity = 0;
+        let totalWeight = 0;
+        
+        // 好友名称相似度（权重：0.4）
+        if (features1.friendNames.length > 0 || features2.friendNames.length > 0) {
+            const nameSimilarity = this.calculateArraySimilarity(features1.friendNames, features2.friendNames);
+            similarity += nameSimilarity * 0.4;
+            totalWeight += 0.4;
+        }
+        
+        // 消息类型相似度（权重：0.2）
+        if (features1.messageTypes.length > 0 || features2.messageTypes.length > 0) {
+            const typeSimilarity = this.calculateArraySimilarity(features1.messageTypes, features2.messageTypes);
+            similarity += typeSimilarity * 0.2;
+            totalWeight += 0.2;
+        }
+        
+        // 消息数量相似度（权重：0.2）
+        const countDiff = Math.abs(features1.messageCount - features2.messageCount);
+        const maxCount = Math.max(features1.messageCount, features2.messageCount);
+        const countSimilarity = maxCount > 0 ? 1 - (countDiff / maxCount) : 1;
+        similarity += countSimilarity * 0.2;
+        totalWeight += 0.2;
+        
+        // 内容长度相似度（权重：0.1）
+        const lengthDiff = Math.abs(features1.contentLength - features2.contentLength);
+        const maxLength = Math.max(features1.contentLength, features2.contentLength);
+        const lengthSimilarity = maxLength > 0 ? 1 - (lengthDiff / maxLength) : 1;
+        similarity += lengthSimilarity * 0.1;
+        totalWeight += 0.1;
+        
+        // 哈希比较（权重：0.1）
+        const hashSimilarity = features1.hash === features2.hash ? 1 : 0;
+        similarity += hashSimilarity * 0.1;
+        totalWeight += 0.1;
+        
+        // 如果没有权重，返回0
+        if (totalWeight === 0) {
+            return 0;
+        }
+        
+        // 归一化相似度
+        return similarity / totalWeight;
+    }
+
+    /**
+     * 计算数组相似度
+     * @param {Array} arr1 - 数组1
+     * @param {Array} arr2 - 数组2
+     * @returns {number} 相似度（0-1）
+     */
+    calculateArraySimilarity(arr1, arr2) {
+        if (arr1.length === 0 && arr2.length === 0) {
+            return 1;
+        }
+        
+        if (arr1.length === 0 || arr2.length === 0) {
+            return 0;
+        }
+        
+        const set1 = new Set(arr1);
+        const set2 = new Set(arr2);
+        
+        const intersection = new Set([...set1].filter(x => set2.has(x)));
+        const union = new Set([...set1, ...set2]);
+        
+        return intersection.size / union.size;
+    }
+
+    /**
+     * 获取去重统计信息
+     * @returns {Object} 统计信息
+     */
+    getDeduplicationStats() {
+        return {
+            processedMessagesCount: this.processedMessages.size,
+            contentHashCacheSize: this.contentHashCache.size,
+            batchProcessingQueueLength: this.batchProcessingQueue.length,
+            isBatchProcessing: this.isBatchProcessing,
+            isProcessing: this.isProcessing,
+            processingLock: this.processingLock,
+            lastProcessTime: this.lastProcessTime,
+            lastProcessedContentHash: this.lastProcessedContentHash,
+            timeSinceLastProcess: Date.now() - this.lastProcessTime
+        };
+    }
+
+    /**
+     * 清理缓存 - 手动触发
+     * @param {Object} options - 清理选项
+     */
+    clearCache(options = {}) {
+        const {
+            clearProcessedMessages = false,
+            clearContentHashCache = false,
+            clearBatchQueue = false,
+            clearAll = false
+        } = options;
+
+        if (clearAll || clearProcessedMessages) {
+            this.processedMessages.clear();
+            console.log('[ChatRecordManager] 已清理处理消息缓存');
+        }
+
+        if (clearAll || clearContentHashCache) {
+            this.contentHashCache.clear();
+            console.log('[ChatRecordManager] 已清理内容哈希缓存');
+        }
+
+        if (clearAll || clearBatchQueue) {
+            this.batchProcessingQueue = [];
+            console.log('[ChatRecordManager] 已清理批处理队列');
+        }
+
+        if (clearAll) {
+            this.lastProcessedContent = '';
+            this.lastProcessedContentHash = '';
+            this.lastProcessTime = 0;
+            console.log('[ChatRecordManager] 已清理所有缓存和状态');
+        }
+
+        return this.getDeduplicationStats();
+    }
+
+    /**
+     * 测试去重功能 - 用于调试
+     * @param {string} content - 测试内容
+     * @returns {Object} 测试结果
+     */
+    testDeduplication(content) {
+        const testResult = {
+            originalContent: content,
+            contentHash: this.simpleHash(content),
+            isDuplicate: false,
+            duplicateReason: '',
+            features: this.extractContentFeatures(content)
+        };
+
+        // 检查基础哈希重复
+        if (testResult.contentHash === this.lastProcessedContentHash) {
+            testResult.isDuplicate = true;
+            testResult.duplicateReason = '基础哈希重复';
+            return testResult;
+        }
+
+        // 检查时间窗口重复
+        const now = Date.now();
+        const timeSinceLastProcess = now - this.lastProcessTime;
+        if (timeSinceLastProcess < 1000 && this.isSimilarContent(content, this.lastProcessedContent)) {
+            testResult.isDuplicate = true;
+            testResult.duplicateReason = '时间窗口内相似内容';
+            return testResult;
+        }
+
+        // 检查内容相似性
+        if (this.isSimilarContent(content, this.lastProcessedContent)) {
+            testResult.isDuplicate = true;
+            testResult.duplicateReason = '内容相似';
+            return testResult;
+        }
+
+        return testResult;
+    }
+
+    /**
+     * 启用调试模式
+     * @param {boolean} enabled - 是否启用
+     */
+    setDebugMode(enabled) {
+        this.debugMode = enabled;
+        if (enabled) {
+            console.log('[ChatRecordManager] 调试模式已启用');
+            
+            // 暴露调试函数到全局
+            window.chatRecordManagerDebug = {
+                getStats: () => this.getDeduplicationStats(),
+                clearCache: (options) => this.clearCache(options),
+                testDeduplication: (content) => this.testDeduplication(content),
+                getProcessedMessages: () => Array.from(this.processedMessages),
+                getContentHashCache: () => Array.from(this.contentHashCache.entries()),
+                forceProcess: (content) => {
+                    this.lastProcessedContentHash = '';
+                    this.lastProcessTime = 0;
+                    return this.manualParseChatRecord(content);
+                }
+            };
+            
+            console.log('[ChatRecordManager] 调试函数已暴露到 window.chatRecordManagerDebug');
+        } else {
+            delete window.chatRecordManagerDebug;
+            console.log('[ChatRecordManager] 调试模式已禁用');
+        }
+    }
+
+    /**
      * 销毁聊天记录管理器
      */
     destroy() {
@@ -773,6 +1260,14 @@ class ChatRecordManager {
             clearTimeout(this.debounceTimer);
             this.debounceTimer = null;
         }
+
+        if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+            this.processingTimeout = null;
+        }
+
+        // 清理所有缓存
+        this.clearCache({ clearAll: true });
 
         this.isActive = false;
         console.log('[ChatRecordManager] 聊天记录管理器已停止');

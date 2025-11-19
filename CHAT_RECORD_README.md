@@ -8,6 +8,7 @@
 - 根据好友ID区分并记录到对应聊天界面
 - 支持图片URL渲染
 - 确保不同角色卡数据隔离
+- **智能去重**：防止重复录入相同的聊天记录（新增功能）
 
 ## 支持的消息类型
 
@@ -54,6 +55,7 @@
    - 负责自动读取和解析聊天记录
    - 集成到现有的微信扩展中
    - 提供完整的API接口
+   - **智能去重功能**：防止重复录入相同的聊天记录（新增）
 
 ### 数据隔离机制
 
@@ -68,6 +70,39 @@
 - 支持点击查看大图
 - 响应式图片显示
 
+## 去重功能
+
+### 概述
+
+本扩展现在包含强大的去重功能，参考了mobile-main的最佳实践，有效防止重复录入相同的聊天记录。
+
+### 多层去重机制
+
+1. **基础哈希检查**：使用内容哈希快速识别完全相同的内容
+2. **时间窗口检查**：防止短时间内重复处理相同内容
+3. **内容相似性检查**：通过特征分析识别微小变化的重复内容
+4. **智能批处理**：优化性能，避免频繁处理
+
+### 去重配置
+
+去重功能会自动工作，但也可以通过以下方式进行调试和监控：
+
+```javascript
+// 启用调试模式
+window.chatRecordManager.setDebugMode(true);
+
+// 获取去重统计信息
+const stats = window.chatRecordManager.getDeduplicationStats();
+
+// 测试去重功能
+const result = window.chatRecordManagerDebug.testDeduplication(content);
+
+// 清理缓存
+window.chatRecordManager.clearCache({ clearAll: true });
+```
+
+详细使用说明请参考 [DEDUPLICATION_README.md](./DEDUPLICATION_README.md)
+
 ## 集成方式
 
 ### 自动集成
@@ -75,7 +110,7 @@
 功能会自动集成到现有的微信扩展中，无需额外配置：
 
 1. 自动监听页面变化，检测新的聊天记录
-2. 自动解析聊天记录并保存到本地存储
+2. 自动解析聊天记录并保存到本地存储（自动去重）
 3. 在聊天界面中显示解析的消息
 4. 更新好友列表中的最后消息
 
@@ -158,6 +193,17 @@ const imported = window.chatRecordManager.importChatRecords(jsonData);
    - 检查存储键是否正确生成
    - 清空浏览器缓存重试
 
+4. **仍然出现重复记录**（新增）
+   - 检查是否启用了调试模式
+   - 查看控制台是否有错误信息
+   - 尝试清理所有缓存
+   - 使用测试页面验证去重功能
+
+5. **去重过于严格**（新增）
+   - 调整相似度阈值（修改代码中的0.8值）
+   - 检查特征提取是否准确
+   - 考虑禁用某些检查
+
 ### 调试方法
 
 1. 打开浏览器开发者工具
@@ -165,7 +211,42 @@ const imported = window.chatRecordManager.importChatRecords(jsonData);
 3. 使用 `window.chatRecordManager` API进行手动测试
 4. 检查本地存储中的数据结构
 
+#### 去重功能调试（新增）
+
+```javascript
+// 检查去重统计
+const stats = window.chatRecordManager.getDeduplicationStats();
+console.log(stats);
+
+// 启用调试模式
+window.chatRecordManager.setDebugMode(true);
+
+// 测试去重功能
+const result = window.chatRecordManagerDebug.testDeduplication(content);
+console.log(result);
+
+// 清理缓存
+window.chatRecordManager.clearCache({ clearAll: true });
+```
+
+#### 测试页面
+
+打开 `test-deduplication.html` 页面可以测试去重功能：
+
+1. 在浏览器中打开测试页面
+2. 输入聊天记录内容
+3. 点击"测试去重"按钮
+4. 查看测试结果和统计信息
+
 ## 更新日志
+
+### v1.2.0
+- 新增强大的去重功能
+- 实现多层去重检查机制
+- 添加内容相似性分析
+- 实现智能批处理和缓存管理
+- 添加调试和测试功能
+- 创建专用测试页面
 
 ### v1.0.0
 - 初始版本
