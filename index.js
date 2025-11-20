@@ -263,24 +263,31 @@
         'app/chat-record-manager.js', // 聊天记录管理器
       ].map(p => `${extensionBasePath}/${p}`);
 
-      // 6) 加载基础模块（并行）
-      const baseResults = await Promise.all(baseModules.map(u => loadScript(u)));
+      // 6) 加载基础模块（串行，确保依赖顺序）
+      console.log('[WeChat Simulator] 开始加载基础模块...');
+      const baseResults = [];
+      for (const u of baseModules) {
+        const result = await loadScript(u);
+        baseResults.push(result);
+        if (!result.ok) {
+          console.error(`[WeChat Simulator] 基础模块加载失败: ${result.url}`);
+        } else {
+          console.log(`[WeChat Simulator] 基础模块加载成功: ${result.url}`);
+        }
+      }
+      
       const baseOk = baseResults.every(r => r.ok);
       if (!baseOk) {
         console.error('[WeChat Simulator] 基础模块加载失败，进入降级模式：仅创建悬浮按钮（功能受限）');
 
-        // 记录具体哪些模块加载失败
-        baseResults.forEach(result => {
-          if (!result.ok) {
-            console.error(`[WeChat Simulator] 失败模块: ${result.url}`);
-          }
-        });
-
         // 尝试单独重新加载每个失败的模块
-        for (const result of baseResults) {
+        for (let i = 0; i < baseResults.length; i++) {
+          const result = baseResults[i];
           if (!result.ok) {
             try {
+              console.log(`[WeChat Simulator] 重试加载模块: ${result.url}`);
               const retryResult = await loadScript(result.url);
+              baseResults[i] = retryResult;
               if (retryResult.ok) {
                 console.log(`[WeChat Simulator] 重试加载成功: ${result.url}`);
               }
@@ -307,6 +314,85 @@
       }
 
       // 7) 启动扩展（无论是否降级，都创建入口）
+      function ensurePhoneInstance() {
+        try {
+          // 确保微信手机实例已创建
+          if (!window.wechatPhone) {
+            // 检查WeChatPhone类是否已定义
+            if (typeof WeChatPhone !== 'undefined') {
+              window.wechatPhone = new WeChatPhone();
+              console.log('[WeChat Simulator] 微信手机实例创建成功');
+            } else {
+              console.error('[WeChat Simulator] WeChatPhone类未定义，无法创建实例');
+              console.log('[WeChat Simulator] 可用的全局变量:', Object.keys(window).filter(k => k.includes('WeChat')));
+              return false;
+            }
+          }
+          return true;
+        } catch (e) {
+          console.error('[WeChat Simulator] 创建微信手机实例失败:', e);
+          return false;
+        }
+      }
+
+      function initExtension() {
+        try {
+          // 确保微信手机实例已创建
+          if (!ensurePhoneInstance()) {
+            throw new Error('无法创建微信手机实例');
+          }
+
+          // 创建悬浮按钮
+          if (!document.getElementById('wechat-trigger')) {
+            const trigger = document.createElement('div');
+            trigger.id = 'wechat-trigger';
+            trigger.className = 'wechat-button';
+            Object.assign(trigger.style, {
+              position: 'fixed',
+              bottom: '100px',
+              right: '20px',
+              width: '60px',
+              height: '60px',
+              borderRadius: '50%',
+              zIndex: '9999',
+              background: '#07C160',
+              color: '#fff',
+              fontSize: '24px',
+              lineHeight: '60px',
+              textAlign: 'center',
+              cursor: 'grab',
+              boxShadow: '0 6px 18px rgba(7, 193, 96, 0.35)',
+            });
+            trigger.innerText = '💬';
+            trigger.title = '打开微信模拟器';
+            document.body.appendChild(trigger);
+
+            // 绑定点击事件
+            trigger.addEventListener('click', () => {
+              if (window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
+                window.wechatPhone.toggle();
+              }
+            });
+
+            // 添加拖拽功能（如果drag-helper已加载）
+            if (window.DragHelper) {
+              window.wechatDragHelper = new window.DragHelper(trigger, {
+                onDragStart: () => {
+                  trigger.style.cursor = 'grabbing';
+                },
+                onDragEnd: () => {
+                  trigger.style.cursor = 'grab';
+                }
+              });
+            }
+          }
+
+          console.log('[WeChat Simulator] 扩展初始化完成');
+        } catch (e) {
+          console.error('[WeChat Simulator] 扩展初始化失败:', e);
+        }
+      }
+
       initExtension();
       // 无论可选模块是否加载成功，都挂载一次降级扫描器，保证 GitHub Raw 等 nosniff 场景下也能解析结构化聊天块
       try {
@@ -316,7 +402,7 @@
       }
 
       // 创建实例并按设置尝试自动打开
-      await ensurePhoneInstance(6);
+      await ensurePhoneInstance();
       try {
         const ctx = window.SillyTavern?.getContext?.();
         const autoOpen = !!(ctx?.extensionSettings?.wechat_simulator?.autoOpen ?? true);
@@ -349,197 +435,6 @@
           console.warn('[WeChat Simulator] 启用降级监听器失败:', e);
         }
       });
-
-      // 9) 初始化入口按钮与容错实例化
-      function initExtension() {
-        // 悬浮按钮（兜底内联样式，避免样式未加载导致不可见）
-        if (!document.getElementById('wechat-trigger')) {
-          const trigger = document.createElement('div');
-          trigger.id = 'wechat-trigger';
-          trigger.className = 'wechat-button';
-          Object.assign(trigger.style, {
-            position: 'fixed',
-            bottom: '100px',
-            right: '20px',
-            width: '60px',
-            height: '60px',
-            borderRadius: '50%',
-            zIndex: '9999',
-            background: '#07C160',
-            color: '#fff',
-            fontSize: '24px',
-            lineHeight: '60px',
-            textAlign: 'center',
-            cursor: 'grab',
-            boxShadow: '0 6px 18px rgba(7, 193, 96, 0.35)',
-          });
-          trigger.innerText = '💬';
-          trigger.title = '打开微信模拟器';
-          document.body.appendChild(trigger);
-
-          trigger.addEventListener('click', async () => {
-            // 已有实例
-            if (window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
-              window.wechatPhone.toggle();
-              return;
-            }
-            // 尝试通过类直接创建
-            if (window.WeChatPhone) {
-              try {
-                window.wechatPhone = new window.WeChatPhone();
-                window.wechatPhone.toggle();
-                return;
-              } catch (e) {
-                console.warn('[WeChat Simulator] 初始化 WeChatPhone 失败:', e);
-              }
-            }
-            // 退化：如果全局有初始化函数（非模块顶层函数），调用它
-            if (typeof window.initWeChatPhone === 'function') {
-              try {
-                window.initWeChatPhone();
-                if (window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
-                  window.wechatPhone.toggle();
-                  return;
-                }
-              } catch (e) {
-                console.warn('[WeChat Simulator] 调用 initWeChatPhone 失败:', e);
-              }
-            }
-            // 最后再轮询若干次（等待脚本异步加载完成）
-            const ok = await ensurePhoneInstance(6);
-            if (ok && window.wechatPhone && typeof window.wechatPhone.toggle === 'function') {
-              window.wechatPhone.toggle();
-              return;
-            }
-            console.warn('[WeChat Simulator] 手机框架未就绪（降级模式），仅显示入口按钮');
-          });
-
-          if (window.DragHelper) {
-            try {
-              new window.DragHelper(trigger, { storageKey: 'wechat-trigger-position' });
-            } catch (e) {
-              console.warn('[WeChat Simulator] DragHelper 初始化失败:', e);
-            }
-          }
-        }
-
-        // 若基础模块成功且类已定义，但 DOMContentLoaded 已过去，主动实例化一次
-        if (!window.wechatPhone && window.WeChatPhone) {
-          try {
-            window.wechatPhone = new window.WeChatPhone();
-          } catch (e) {
-            console.warn('[WeChat Simulator] 主动创建 WeChatPhone 实例失败:', e);
-          }
-        }
-
-        console.log('[WeChat Simulator] 扩展初始化完成（降级容错已启用）');
-      }
-
-      // 实用函数：等待并确保 wechatPhone 实例创建
-      async function ensurePhoneInstance(retries = 10) {
-        // 已有实例
-        if (window.wechatPhone) return true;
-        // 类存在则直接创建
-        if (window.WeChatPhone) {
-          try {
-            window.wechatPhone = new window.WeChatPhone();
-            return true;
-          } catch (e) {
-            console.warn('[WeChat Simulator] 创建 WeChatPhone 实例失败:', e);
-          }
-        }
-        // 若全局有初始化函数，调用
-        if (typeof window.initWeChatPhone === 'function') {
-          try {
-            window.initWeChatPhone();
-            if (window.wechatPhone) return true;
-          } catch (e) {
-            console.warn('[WeChat Simulator] 调用 initWeChatPhone 失败:', e);
-          }
-        }
-        // 递归等待
-        if (retries <= 0) return false;
-        await new Promise(r => setTimeout(r, 500));
-        return ensurePhoneInstance(retries - 1);
-      }
-
-      // 降级：若 context-sync 未加载，启用基于 DOM 的简易扫描器，周期性解析最新一条消息中的结构化聊天块
-      function attachNaiveStructuredScanner() {
-        try {
-          const scan = () => {
-            try {
-              const nodes = document.querySelectorAll('[mesid="1"] .message, [mesid="1"] .mes_text, .mes_text');
-              if (!nodes || !nodes.length) return;
-              const last = nodes[nodes.length - 1];
-              const text = String(last?.textContent || '').trim();
-              if (!text) return;
-              // 先尝试从自由标签中捕获好友 [好友id|昵称|ID]
-              try {
-                window.wechatLocalStore?.captureFromText?.(text);
-              } catch (_e) {
-                console.debug('[WeChat Simulator] captureFromText failed (naive):', _e);
-              }
-              // 解析结构化聊天块（含图片/红包）
-              try {
-                window.wechatLocalStore?.captureStructuredChatFromText?.(text);
-              } catch (_e) {
-                console.debug('[WeChat Simulator] captureStructuredChatFromText failed (naive):', _e);
-              }
-              // 同步列表摘要
-              try {
-                window.wechatLocalStore?.updateList?.(document.getElementById('wechat-content'));
-              } catch (_e) {
-                console.debug('[WeChat Simulator] updateList failed (naive):', _e);
-              }
-            } catch (_e) {
-              console.debug('[WeChat Simulator] naive scan failed:', _e);
-            }
-          };
-
-          // 初次立即扫描一次
-          scan();
-
-          // 观察 DOM 变动（新消息到达）
-          try {
-            const container = document.querySelector('[mesid="1"]') || document.body;
-            if (container && window.MutationObserver) {
-              const obs = new MutationObserver(() => scan());
-              obs.observe(container, { childList: true, subtree: true });
-              window._wechatNaiveObs = obs;
-            }
-          } catch (_e) {
-            console.debug('[WeChat Simulator] MutationObserver attach failed (naive):', _e);
-          }
-
-          // 兜底：每 4 秒轮询一次
-          if (window._wechatNaiveScanTimer) clearInterval(window._wechatNaiveScanTimer);
-          window._wechatNaiveScanTimer = setInterval(scan, 4000);
-        } catch (e) {
-          console.warn('[WeChat Simulator] attachNaiveStructuredScanner 失败:', e);
-        }
-      }
-
-      // 10) 暴露调试助手，便于在控制台快速定位"为何没有悬浮按钮/报错"
-      window.WeChatSim = {
-        path: () => window.wechatExtensionPath,
-        printStatus() {
-          const status = {
-            extensionPath: window.wechatExtensionPath,
-            hasDragHelper: !!window.DragHelper,
-            hasWeChatPhoneClass: !!window.WeChatPhone,
-            hasWeChatPhoneInstance: !!window.wechatPhone,
-            triggerExists: !!document.getElementById('wechat-trigger'),
-            cssWechatLoaded: !!Array.from(document.styleSheets || []).find(s =>
-              (s.href || '').includes('wechat-phone-fixed.css'),
-            ),
-            cssDragLoaded: !!Array.from(document.styleSheets || []).find(s =>
-              (s.href || '').includes('drag-helper.css'),
-            ),
-          };
-          console.log('[WeChat Simulator] Debug Status:', status);
-          return status;
-        },
-      };
     } catch (e) {
       console.error('[WeChat Simulator] 启动失败:', e);
       // 即使致命失败，也尽量提供按钮用于可见提示
@@ -547,6 +442,7 @@
         if (!document.getElementById('wechat-trigger')) {
           const trigger = document.createElement('div');
           trigger.id = 'wechat-trigger';
+          trigger.className = 'wechat-button';
           Object.assign(trigger.style, {
             position: 'fixed',
             bottom: '100px',

@@ -50,7 +50,7 @@ class DragHelper {
     this.bindEvents();
   }
 
-    bindEvents() {
+  bindEvents() {
     // 确定事件绑定的目标元素
     const eventTarget = this.options.dragHandle ?
       this.element.querySelector(this.options.dragHandle) : this.element;
@@ -77,7 +77,7 @@ class DragHelper {
     this.eventTarget = eventTarget;
   }
 
-        handleStart(e) {
+  handleStart(e) {
     // 如果指定了拖拽手柄，检查是否在手柄上开始拖拽
     if (this.options.dragHandle) {
       const handleElement = this.element.querySelector(this.options.dragHandle);
@@ -152,7 +152,7 @@ class DragHelper {
     }
   }
 
-    handleMove(e) {
+  handleMove(e) {
     if (!this.isDragging) return;
 
     const event = e.type.startsWith('touch') ? e.touches[0] : e;
@@ -331,7 +331,7 @@ class DragHelper {
     }
   }
 
-      // 销毁拖拽功能
+  // 销毁拖拽功能
   destroy() {
     // 清除定时器
     if (this.touchTimer) {
